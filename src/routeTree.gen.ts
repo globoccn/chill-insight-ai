@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as EsgRouteImport } from './routes/esg'
+import { Route as ChillersRouteImport } from './routes/chillers'
 import { Route as IndexRouteImport } from './routes/index'
 
 const EsgRoute = EsgRouteImport.update({
   id: '/esg',
   path: '/esg',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChillersRoute = ChillersRouteImport.update({
+  id: '/chillers',
+  path: '/chillers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -25,27 +31,31 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chillers': typeof ChillersRoute
   '/esg': typeof EsgRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chillers': typeof ChillersRoute
   '/esg': typeof EsgRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/chillers': typeof ChillersRoute
   '/esg': typeof EsgRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/esg'
+  fullPaths: '/' | '/chillers' | '/esg'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/esg'
-  id: '__root__' | '/' | '/esg'
+  to: '/' | '/chillers' | '/esg'
+  id: '__root__' | '/' | '/chillers' | '/esg'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChillersRoute: typeof ChillersRoute
   EsgRoute: typeof EsgRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/esg'
       fullPath: '/esg'
       preLoaderRoute: typeof EsgRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chillers': {
+      id: '/chillers'
+      path: '/chillers'
+      fullPath: '/chillers'
+      preLoaderRoute: typeof ChillersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChillersRoute: ChillersRoute,
   EsgRoute: EsgRoute,
 }
 export const routeTree = rootRouteImport

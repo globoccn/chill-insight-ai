@@ -9,11 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as EsgRouteImport } from './routes/esg'
 import { Route as ChillersRouteImport } from './routes/chillers'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EsgRoute = EsgRouteImport.update({
   id: '/esg',
   path: '/esg',
@@ -40,12 +46,14 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AnalyticsRoute
   '/chillers': typeof ChillersRoute
   '/esg': typeof EsgRoute
+  '/reports': typeof ReportsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
   '/chillers': typeof ChillersRoute
   '/esg': typeof EsgRoute
+  '/reports': typeof ReportsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,14 @@ export interface FileRoutesById {
   '/analytics': typeof AnalyticsRoute
   '/chillers': typeof ChillersRoute
   '/esg': typeof EsgRoute
+  '/reports': typeof ReportsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/analytics' | '/chillers' | '/esg'
+  fullPaths: '/' | '/analytics' | '/chillers' | '/esg' | '/reports'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/analytics' | '/chillers' | '/esg'
-  id: '__root__' | '/' | '/analytics' | '/chillers' | '/esg'
+  to: '/' | '/analytics' | '/chillers' | '/esg' | '/reports'
+  id: '__root__' | '/' | '/analytics' | '/chillers' | '/esg' | '/reports'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,10 +76,18 @@ export interface RootRouteChildren {
   AnalyticsRoute: typeof AnalyticsRoute
   ChillersRoute: typeof ChillersRoute
   EsgRoute: typeof EsgRoute
+  ReportsRoute: typeof ReportsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/esg': {
       id: '/esg'
       path: '/esg'
@@ -107,6 +124,7 @@ const rootRouteChildren: RootRouteChildren = {
   AnalyticsRoute: AnalyticsRoute,
   ChillersRoute: ChillersRoute,
   EsgRoute: EsgRoute,
+  ReportsRoute: ReportsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

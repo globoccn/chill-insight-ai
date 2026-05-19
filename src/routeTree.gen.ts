@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as EsgRouteImport } from './routes/esg'
 import { Route as ChillersRouteImport } from './routes/chillers'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as IndexRouteImport } from './routes/index'
 
 const EsgRoute = EsgRouteImport.update({
@@ -23,6 +24,11 @@ const ChillersRoute = ChillersRouteImport.update({
   path: '/chillers',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,30 +37,34 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
   '/chillers': typeof ChillersRoute
   '/esg': typeof EsgRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
   '/chillers': typeof ChillersRoute
   '/esg': typeof EsgRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
   '/chillers': typeof ChillersRoute
   '/esg': typeof EsgRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/chillers' | '/esg'
+  fullPaths: '/' | '/analytics' | '/chillers' | '/esg'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/chillers' | '/esg'
-  id: '__root__' | '/' | '/chillers' | '/esg'
+  to: '/' | '/analytics' | '/chillers' | '/esg'
+  id: '__root__' | '/' | '/analytics' | '/chillers' | '/esg'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AnalyticsRoute: typeof AnalyticsRoute
   ChillersRoute: typeof ChillersRoute
   EsgRoute: typeof EsgRoute
 }
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChillersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AnalyticsRoute: AnalyticsRoute,
   ChillersRoute: ChillersRoute,
   EsgRoute: EsgRoute,
 }

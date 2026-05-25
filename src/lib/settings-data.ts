@@ -47,57 +47,187 @@ export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {
   },
 };
 
-export function normalizeSettings(value: Partial<DashboardSettings> | null | undefined): DashboardSettings {
-  return {
+type SettingsPayload = Partial<DashboardSettings> & Record<string, unknown>;
+
+type SaveSettingsResult = {
+  success: boolean;
+  source?: string;
+  saved?: DashboardSettings;
+  persisted?: DashboardSettings;
+  endpoint?: string;
+  n8nResponse?: unknown;
+};
+
+const NUMERIC_KEYS = [
+  "meta_kwtr",
+  "area_climatizada_m2",
+  "fator_carbono_kgco2_kwh",
+  "intervalo_horas",
+  "deltaT_evap_min",
+  "deltaT_evap_ideal",
+  "limite_kw_pico",
+  "tarifa_kwh",
+  "baseline_kwh_dia",
+  "meta_kwh_mes",
+  "meta_co2_mes_ton",
+  "capacidade_nominal_total_tr",
+] as const satisfies readonly (keyof DashboardSettings)[];
+
+function unwrapSettingsPayload(value: unknown): SettingsPayload {
+  if (!value || typeof value !== "object") return {};
+
+  const payload = value as Record<string, unknown>;
+
+  // O webhook n8n pode responder tanto com o objeto direto quanto com { settings: {...} }.
+  if (payload.settings && typeof payload.settings === "object" && !Array.isArray(payload.settings)) {
+    return payload.settings as SettingsPayload;
+  }
+
+  return payload as SettingsPayload;
+}
+
+function parseDecimal(value: unknown, fallback: number | null): number | null {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (typeof value !== "string") return fallback;
+
+  const raw = value.trim();
+  if (!raw) return fallback;
+
+  const hasComma = raw.includes(",");
+  const hasDot = raw.includes(".");
+  const normalized = hasComma
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : hasDot
+      ? raw.replace(/,/g, "")
+      : raw;
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseString(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+export function normalizeSettings(value: unknown): DashboardSettings {
+  const input = unwrapSettingsPayload(value);
+  const normalized: DashboardSettings = {
     ...DEFAULT_DASHBOARD_SETTINGS,
-    ...(value ?? {}),
+    ...input,
     chiller_names: {
       ...DEFAULT_DASHBOARD_SETTINGS.chiller_names,
-      ...(value?.chiller_names ?? {}),
+      ...(input.chiller_names && typeof input.chiller_names === "object" && !Array.isArray(input.chiller_names)
+        ? input.chiller_names
+        : {}),
     },
   };
+
+  for (const key of NUMERIC_KEYS) {
+    normalized[key] = parseDecimal(input[key], DEFAULT_DASHBOARD_SETTINGS[key] as number | null) as never;
+  }
+
+  normalized.horario_operacional_inicio = parseString(input.horario_operacional_inicio, DEFAULT_DASHBOARD_SETTINGS.horario_operacional_inicio);
+  normalized.horario_operacional_fim = parseString(input.horario_operacional_fim, DEFAULT_DASHBOARD_SETTINGS.horario_operacional_fim);
+  normalized.unidade_vazao = parseString(input.unidade_vazao, DEFAULT_DASHBOARD_SETTINGS.unidade_vazao);
+  normalized.chiller_names = {
+    ur1: parseString(normalized.chiller_names.ur1, DEFAULT_DASHBOARD_SETTINGS.chiller_names.ur1),
+    ur2: parseString(normalized.chiller_names.ur2, DEFAULT_DASHBOARD_SETTINGS.chiller_names.ur2),
+    ur3: parseString(normalized.chiller_names.ur3, DEFAULT_DASHBOARD_SETTINGS.chiller_names.ur3),
+  };
+
+  return normalized;
+}
+
+async function readJsonOrText(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text.trim()) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function settingsEndpoints(): string[] {
+  return Array.from(new Set([SETTINGS_URL, N8N_SETTINGS_URL].filter(Boolean)));
 }
 
 export async function getSettings(): Promise<DashboardSettings> {
-  const response = await fetch(SETTINGS_URL, {
-    method: "GET",
-    headers: { accept: "application/json,text/plain,*/*" },
-    cache: "no-store",
-  });
+  const errors: string[] = [];
 
-  if (!response.ok) {
-    throw new Error(`Falha ao carregar settings: ${response.status}`);
+  for (const endpoint of settingsEndpoints()) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "GET",
+        headers: { accept: "application/json,text/plain,*/*" },
+        cache: "no-store",
+      });
+
+      const payload = await readJsonOrText(response);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      if (payload && typeof payload === "object" && "error" in (payload as Record<string, unknown>)) {
+        throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
+      }
+
+      return normalizeSettings(payload);
+    } catch (error) {
+      errors.push(`${endpoint}: ${(error as Error).message}`);
+    }
   }
 
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
-  return normalizeSettings(payload?.settings ?? payload);
+  throw new Error(`Falha ao carregar settings. Tentativas: ${errors.join(" | ")}`);
 }
 
-export async function saveSettings(settings: DashboardSettings): Promise<{ success: boolean; source?: string; saved?: DashboardSettings; persisted?: DashboardSettings }> {
-  const response = await fetch(SETTINGS_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(settings),
-  });
+export async function saveSettings(settings: DashboardSettings): Promise<SaveSettingsResult> {
+  const payload = normalizeSettings(settings);
+  const errors: string[] = [];
 
-  if (!response.ok) {
-    const message = await response.text().catch(() => "");
-    throw new Error(message || `Falha ao salvar settings: ${response.status}`);
+  for (const endpoint of settingsEndpoints()) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json,text/plain,*/*",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const responsePayload = await readJsonOrText(response);
+
+      if (!response.ok) {
+        const detail = typeof responsePayload === "string" ? responsePayload : JSON.stringify(responsePayload);
+        throw new Error(detail || `HTTP ${response.status}`);
+      }
+
+      const result = responsePayload && typeof responsePayload === "object" ? (responsePayload as Record<string, unknown>) : {};
+
+      return {
+        ...result,
+        success: true,
+        endpoint,
+        source: typeof result.source === "string" ? result.source : endpoint === N8N_SETTINGS_URL ? "n8n-direct" : "dashboard-proxy",
+        saved: normalizeSettings(result.saved ?? payload),
+        persisted: result.persisted ? normalizeSettings(result.persisted) : undefined,
+        n8nResponse: result.n8nResponse,
+      };
+    } catch (error) {
+      errors.push(`${endpoint}: ${(error as Error).message}`);
+    }
   }
 
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : { success: true };
-  return {
-    ...payload,
-    saved: payload.saved ? normalizeSettings(payload.saved) : undefined,
-    persisted: payload.persisted ? normalizeSettings(payload.persisted?.settings ?? payload.persisted) : undefined,
-  };
+  throw new Error(`Falha ao salvar settings. Tentativas: ${errors.join(" | ")}`);
 }
 
 export function useSettings() {
   return useQuery({
-    queryKey: ["dashboard-settings"],
+    queryKey: ["dashboard-settings", SETTINGS_URL, N8N_SETTINGS_URL],
     queryFn: getSettings,
     staleTime: 60 * 1000,
     retry: 1,

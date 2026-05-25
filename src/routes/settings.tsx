@@ -37,7 +37,16 @@ function toInputValue(value: number | null | undefined) {
 function parseNumberInput(value: string): number | null {
   const raw = value.trim();
   if (!raw) return null;
-  const parsed = Number(raw.replace(".", "").replace(",", "."));
+
+  const hasComma = raw.includes(",");
+  const hasDot = raw.includes(".");
+  const normalized = hasComma
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : hasDot
+      ? raw.replace(/,/g, "")
+      : raw;
+
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -178,8 +187,8 @@ function SettingsPage() {
     setSettings(normalizeSettings(confirmed));
     setSavedMessage(
       result.persisted
-        ? "Settings salvas e confirmadas no Redis cag:settings."
-        : "Settings enviadas ao n8n. Não foi possível confirmar leitura imediata do Redis pelo dashboard.",
+        ? `Settings salvas e confirmadas no Redis cag:settings via ${result.source ?? result.endpoint ?? "endpoint configurado"}.`
+        : `Settings enviadas via ${result.source ?? result.endpoint ?? "endpoint configurado"}. Não foi possível confirmar leitura imediata do Redis pelo dashboard.`,
     );
   };
 

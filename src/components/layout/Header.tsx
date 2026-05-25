@@ -1,12 +1,17 @@
-import { Calendar, CheckCircle2, Download, Moon, Sun, ChevronDown } from "lucide-react";
+import { Calendar, CheckCircle2, Moon, Sun, ChevronDown } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { formatDate, formatDateTime, useDashboardData } from "@/lib/dashboard-data";
+import { periodLabels, setDashboardPeriod, useDashboardPeriod, type DashboardPeriod } from "@/lib/period";
 
 export function Header() {
   const { theme, toggle } = useTheme();
   const { data } = useDashboardData();
+  const period = useDashboardPeriod();
+  const periods: DashboardPeriod[] = ["day", "week", "month"];
 
-  const analyzedDate = formatDate(data?.overview.periodo_fim);
+  const startDate = formatDate(data?.overview.periodo_inicio);
+  const endDate = formatDate(data?.overview.periodo_fim);
+  const analyzedDate = period === "day" || startDate === endDate ? endDate : `${startDate} – ${endDate}`;
   const lastImport = formatDateTime(data?.overview.periodo_fim);
 
   return (
@@ -35,10 +40,23 @@ export function Header() {
             </span>
           </div>
 
-          <button className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium shadow-sm transition hover:border-efficiency/40">
-            <Download className="h-4 w-4" />
-            Exportar relatório
-          </button>
+          <div className="hidden sm:flex items-center rounded-xl border border-border bg-card p-1 shadow-sm">
+            {periods.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setDashboardPeriod(item)}
+                className={[
+                  "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                  period === item
+                    ? "bg-efficiency/15 text-efficiency shadow-[0_0_18px_rgba(0,210,150,0.16)]"
+                    : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+              >
+                {periodLabels[item]}
+              </button>
+            ))}
+          </div>
 
           <button onClick={toggle} aria-label="Alternar tema" className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-card px-1 shadow-sm">
             <span className={["grid h-7 w-7 place-items-center rounded-full transition", theme === "light" ? "bg-warning/20 text-warning" : "text-muted-foreground"].join(" ")}><Sun className="h-3.5 w-3.5" /></span>

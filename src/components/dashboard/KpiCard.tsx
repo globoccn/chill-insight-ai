@@ -1,6 +1,7 @@
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import type { DashboardKpi } from "@/lib/dashboard-data";
+import { useDashboardPeriod } from "@/lib/period";
 
 const colorVar: Record<DashboardKpi["color"], string> = {
   water: "var(--color-water)",
@@ -51,6 +52,9 @@ function buildVisualSparkline(points: DashboardKpi["sparkline"]) {
 }
 
 export function KpiCard({ kpi, icon }: { kpi: DashboardKpi; icon?: React.ReactNode }) {
+  const period = useDashboardPeriod();
+  const primaryComparisonLabel = period === "day" ? "vs D-2" : period === "week" ? "vs semana ant." : "vs mês ant.";
+  const secondaryComparisonLabel = period === "day" ? "vs 7 dias" : "vs 7 dias ant.";
   const c = colorVar[kpi.color];
   const id = `kpi-${kpi.key}`;
   const showSparkline = kpi.key !== "hours";
@@ -73,8 +77,8 @@ export function KpiCard({ kpi, icon }: { kpi: DashboardKpi; icon?: React.ReactNo
       </div>
 
       <div className="relative mt-2 space-y-0.5 text-[11px] leading-4">
-        <div><TrendLine value={kpi.dod} goodWhen={kpi.goodWhen} /> <span className="text-muted-foreground">vs D-2</span></div>
-        <div><TrendLine value={kpi.d7} goodWhen={kpi.goodWhen} /> <span className="text-muted-foreground">vs 7 dias</span></div>
+        <div><TrendLine value={kpi.dod} goodWhen={kpi.goodWhen} /> <span className="text-muted-foreground">{primaryComparisonLabel}</span></div>
+        <div><TrendLine value={kpi.d7} goodWhen={kpi.goodWhen} /> <span className="text-muted-foreground">{secondaryComparisonLabel}</span></div>
       </div>
 
       {kpi.extra ? <div className="relative mt-1 text-[10.5px] text-muted-foreground line-clamp-1">{kpi.extra}</div> : null}

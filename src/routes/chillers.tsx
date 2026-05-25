@@ -238,7 +238,7 @@ function buildOperationalInsights(data: DashboardData) {
   } else if (avgCap !== null) {
     insights.push({
       title: "Balanceamento de carga",
-      message: `Capacidade média operacional em ${formatNumber(avgCap)}%, útil para avaliar sequenciamento das unidades.`,
+      message: `Carga média operacional em ${formatNumber(avgCap)}%, útil para avaliar sequenciamento das unidades.`,
       severity: "info",
     });
   }
@@ -265,41 +265,52 @@ function KpiTile({ label, value, unit, icon, tone = "water", helper }: { label: 
 
 function ChillerMachineCard({ c, meta }: { c: DashboardChiller; meta: number }) {
   const color = chillerColor(c.id || c.name);
+  const online = c.online || c.status === "Online";
   const cap = Math.max(0, Math.min(100, asNumber(c.cap_media ?? c.cap_atual)));
   const consumption = Math.max(0, Math.min(100, asNumber(c.participacao_consumo)));
   const effRatio = c.kwtr && meta ? Math.max(0, Math.min(100, 100 - ((asNumber(c.kwtr) - meta) / meta) * 100)) : 0;
+  const stateLabel = online
+    ? asNumber(c.kwtr) > 0 && asNumber(c.kwtr) <= meta ? "Operação eficiente" : "Operação ativa"
+    : "Pronta para partida";
+  const statusColor = online ? color : colors.warning;
 
   return (
-    <div className="control-card relative overflow-hidden rounded-2xl p-4">
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 opacity-60 blur-2xl" style={{ background: `linear-gradient(180deg, transparent, ${color}24)` }} />
+    <div className="control-card group relative overflow-hidden rounded-2xl p-4 transition duration-300 hover:-translate-y-0.5 hover:border-foreground/15">
+      <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full opacity-40 blur-3xl" style={{ background: statusColor }} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 opacity-70 blur-2xl" style={{ background: `linear-gradient(180deg, transparent, ${statusColor}28)` }} />
+      <div className="pointer-events-none absolute left-0 top-0 h-full w-1" style={{ background: `linear-gradient(180deg, ${statusColor}, transparent)` }} />
+
       <div className="relative flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-foreground/[0.04] dark:bg-white/[0.04]" style={{ color }}>
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-foreground/[0.04] shadow-[inset_0_0_24px_rgba(255,255,255,0.04)] dark:bg-white/[0.04]" style={{ color: statusColor, boxShadow: `0 0 24px ${statusColor}22` }}>
             <Snowflake className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-lg font-semibold tracking-tight">{c.name}</div>
-            <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Unidade resfriadora</div>
+            <div className="flex items-center gap-2">
+              <div className="text-lg font-semibold tracking-tight">{c.name}</div>
+              <span className="h-2 w-2 rounded-full" style={{ background: statusColor, boxShadow: `0 0 12px ${statusColor}` }} />
+            </div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{stateLabel}</div>
           </div>
         </div>
         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusTone(c.status)}`}>{c.status}</span>
       </div>
 
-      <div className="relative mt-4 grid grid-cols-2 gap-3">
+      <div className="relative mt-5 grid grid-cols-[1.2fr_0.8fr] gap-4">
         <div>
-          <div className="text-[11px] text-muted-foreground">Eficiência</div>
-          <div className={`mt-1 text-2xl font-semibold tracking-tight ${efficiencyTone(c.kwtr, meta)}`}>{formatNumber(c.kwtr, 3)}</div>
-          <div className="text-[10.5px] text-muted-foreground">kW/TR</div>
+          <div className="text-[11px] text-muted-foreground">Eficiência instantânea</div>
+          <div className={`mt-1 text-4xl font-semibold leading-none tracking-tight ${efficiencyTone(c.kwtr, meta)}`}>{formatNumber(c.kwtr, 3)}</div>
+          <div className="mt-1 text-[10.5px] text-muted-foreground">kW/TR · meta {formatNumber(meta, 2)}</div>
         </div>
-        <div>
+        <div className="rounded-xl border border-border/70 bg-background/40 p-3 text-right dark:bg-white/[0.03]">
           <div className="text-[11px] text-muted-foreground">COP</div>
           <div className="mt-1 text-2xl font-semibold tracking-tight">{formatNumber(c.cop, 2)}</div>
           <div className="text-[10.5px] text-muted-foreground">performance</div>
         </div>
       </div>
 
-      <div className="relative mt-4 space-y-3">
-        <MetricBar label="Capacidade média" value={cap} suffix="%" color={color} />
+      <div className="relative mt-5 space-y-3.5">
+        <MetricBar label="Carga operacional" value={cap} suffix="%" color={statusColor} />
         <MetricBar label="Participação consumo" value={consumption} suffix="%" color={colors.warning} />
         <MetricBar label="Score eficiência" value={effRatio} suffix="%" color={effRatio >= 75 ? colors.ur2 : colors.warning} />
       </div>
@@ -554,7 +565,7 @@ function ChillersPage() {
           <KpiTile label="Consumo chillers" value={formatNumber(totalKwh)} unit="kWh" icon={<Zap className="h-4 w-4" />} tone="water" helper="Soma das unidades" />
           <KpiTile label="Eficiência média" value={formatNumber(avgKwtr, 3)} unit="kW/TR" icon={<Gauge className="h-4 w-4" />} tone={avgKwtr && avgKwtr <= meta ? "efficiency" : "warning"} helper="Ponderada por TRh" />
           <KpiTile label="COP médio" value={formatNumber(avgCop, 2)} icon={<Activity className="h-4 w-4" />} tone="esg" helper="Conversão termodinâmica" />
-          <KpiTile label="Capacidade média" value={formatNumber(avgCap)} unit="%" icon={<BarChart3 className="h-4 w-4" />} tone="carbon" helper="Somente unidades online" />
+          <KpiTile label="Carga média operacional" value={formatNumber(avgCap)} unit="%" icon={<BarChart3 className="h-4 w-4" />} tone="carbon" helper="Média das unidades online" />
           <KpiTile label="Maior participação" value={peakConsumer?.name || "—"} icon={<Thermometer className="h-4 w-4" />} tone="warning" helper={`${formatNumber(peakConsumer?.participacao_consumo, 1)}% do consumo`} />
         </div>
 

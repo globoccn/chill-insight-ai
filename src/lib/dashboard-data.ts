@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { getDashboardPeriod, useDashboardPeriod, type DashboardPeriod } from "@/lib/period";
 
 export const N8N_API_BASE_URL =
   import.meta.env.VITE_API_URL ||
@@ -312,6 +313,37 @@ function aggregatePointsForDay(date: string, points: DashboardPoint[], settings:
   };
 }
 
+function aggregatePointsForDates(dates: string[], points: DashboardPoint[], settings: Record<string, unknown> = {}, esg: DashboardData["esg"] = {}): DailyAggregate {
+  const allowed = new Set(dates);
+  const periodPoints = points.filter((p) => allowed.has(dateKey(p.timestamp) || ""));
+  const intervalHours = asNumber(settings.intervalo_horas, 0.25);
+  const carbonFactor = asNumber(esg?.fator_carbono_kgco2_kwh ?? settings.fator_carbono_kgco2_kwh, 0.0385);
+  const kwh = sumValues(periodPoints, (p) => p.kwh_total);
+  const trh = sumValues(periodPoints, (p) => p.trh_total);
+  const kwtr = safeRatio(kwh, trh);
+  const cop = kwtr ? 3.516 / kwtr : null;
+  const picoKw = periodPoints.reduce((max, p) => Math.max(max, asNumber(p.kw_total)), 0);
+  const horas = periodPoints.reduce((acc, p) => acc + (asNumber(p.kw_total) > 0 || asNumber(p.tr_total) > 0 ? intervalHours : 0), 0);
+  return {
+    date: dates.at(-1) || "",
+    kwh_total: roundValue(kwh, 2),
+    carbono_ton: roundValue((kwh * carbonFactor) / 1000, 6),
+    kwtr_medio: roundValue(kwtr, 3),
+    cop_medio: roundValue(cop, 2),
+    trh_total: roundValue(trh, 2),
+    deltaT_evap_medio: roundValue(avgValues(periodPoints.filter((p) => asNumber(p.tr_total) > 0), (p) => p.deltaT_evap_medio), 2),
+    pico_kw: roundValue(picoKw, 2),
+    horas_operacao: roundValue(horas, 2),
+  };
+}
+
+function periodWindowDates(dates: string[], reference: string | null, period: DashboardPeriod) {
+  const ref = reference || dates.at(-1) || null;
+  if (!ref) return [];
+  const upToReference = dates.filter((d) => d <= ref);
+  const size = period === "month" ? 30 : period === "week" ? 7 : 1;
+  return upToReference.slice(-size);
+}
 
 function downsampleSparkline(points: KpiPoint[], maxPoints = 42): KpiPoint[] {
   const valid = points.filter((p) => Number.isFinite(Number(p.v)));
@@ -384,27 +416,25 @@ function buildDailyTrends(allPoints: DashboardPoint[], selectedDate: string | nu
   };
 }
 
-function buildComparisons(allPoints: DashboardPoint[], selectedDate: string | null, settings: Record<string, unknown> = {}, esg: DashboardData["esg"] = {}): DashboardData["comparisons"] {
+function buildComparisons(allPoints: DashboardPoint[], selectedDate: string | null, settings: Record<string, unknown> = {}, esg: DashboardData["esg"] = {}, period: DashboardPeriod = "day"): DashboardData["comparisons"] {
   const dates = Array.from(new Set(allPoints.map((p) => dateKey(p.timestamp)).filter(Boolean) as string[])).sort();
-  const reference = selectedDate || dates.at(-1) || null;
-  if (!reference) return { reference_day: null, previous_day: null, metrics: {} };
+  const currentDates = periodWindowDates(dates, selectedDate, period);
+  const reference = currentDates.at(-1) || selectedDate || dates.at(-1) || null;
+  if (!reference || !currentDates.length) return { reference_day: null, previous_day: null, metrics: {} };
 
-  const previous = [...dates].filter((d) => d < reference).at(-1) || null;
-  const currentAgg = aggregatePointsForDay(reference, allPoints, settings, esg);
-  const previousAgg = previous ? aggregatePointsForDay(previous, allPoints, settings, esg) : null;
-  const comparisonDates = dates.filter((d) => d < reference).slice(-7);
-  const comparisonAggs = comparisonDates.map((d) => aggregatePointsForDay(d, allPoints, settings, esg));
+  const firstCurrent = currentDates[0];
+  const periodSize = currentDates.length;
+  const previousDates = dates.filter((d) => d < firstCurrent).slice(-periodSize);
+  const sevenDayDates = dates.filter((d) => d < firstCurrent).slice(-7);
 
-  const avgMetric = (key: keyof DailyAggregate) => {
-    const values = comparisonAggs.map((d) => d[key]).map((v) => Number(v)).filter((v) => Number.isFinite(v));
-    if (!values.length) return null;
-    return roundValue(values.reduce((acc, v) => acc + v, 0) / values.length, key === "kwtr_medio" ? 3 : key === "cop_medio" || key === "deltaT_evap_medio" || key === "horas_operacao" ? 2 : 2);
-  };
+  const currentAgg = aggregatePointsForDates(currentDates, allPoints, settings, esg);
+  const previousAgg = previousDates.length ? aggregatePointsForDates(previousDates, allPoints, settings, esg) : null;
+  const sevenAgg = sevenDayDates.length ? aggregatePointsForDates(sevenDayDates, allPoints, settings, esg) : null;
 
   const metric = (key: keyof DailyAggregate) => {
     const current = currentAgg[key] as number | null;
     const prev = previousAgg ? previousAgg[key] as number | null : null;
-    const seven = avgMetric(key);
+    const seven = sevenAgg ? sevenAgg[key] as number | null : null;
     return {
       current,
       previous_day: prev,
@@ -416,7 +446,7 @@ function buildComparisons(allPoints: DashboardPoint[], selectedDate: string | nu
 
   return {
     reference_day: reference,
-    previous_day: previous,
+    previous_day: previousDates.at(-1) || null,
     metrics: {
       energy: metric("kwh_total"),
       carbon: metric("carbono_ton"),
@@ -474,16 +504,19 @@ function buildDailyChillers(points: DashboardPoint[], totalKwh: number, interval
   });
 }
 
-function scopeDashboardDataToAnalyzedDate(data: DashboardData): DashboardData {
+function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"): DashboardData {
   const allPoints = Array.isArray(data.analytics?.series_15min) ? data.analytics.series_15min : [];
-  const selectedDate = dateKey(data.overview?.periodo_fim) || dateKey(allPoints.at(-1)?.timestamp);
-  const comparisons = buildComparisons(allPoints, selectedDate, data.settings ?? {}, data.esg ?? {});
+  const allDates = Array.from(new Set(allPoints.map((p) => dateKey(p.timestamp)).filter(Boolean) as string[])).sort();
+  const selectedDate = dateKey(data.overview?.periodo_fim) || dateKey(allPoints.at(-1)?.timestamp) || allDates.at(-1) || null;
+  const periodDates = periodWindowDates(allDates, selectedDate, period);
+  const comparisons = buildComparisons(allPoints, selectedDate, data.settings ?? {}, data.esg ?? {}, period);
   const daily_trends = buildDailyTrends(allPoints, selectedDate, data.settings ?? {}, data.esg ?? {});
 
-  if (!selectedDate || !allPoints.length) return { ...data, comparisons, daily_trends };
+  if (!selectedDate || !allPoints.length || !periodDates.length) return { ...data, comparisons, daily_trends };
 
-  const points = allPoints.filter((point) => dateKey(point.timestamp) === selectedDate);
-  if (!points.length || points.length === allPoints.length) return { ...data, comparisons, daily_trends };
+  const allowedDates = new Set(periodDates);
+  const points = allPoints.filter((point) => allowedDates.has(dateKey(point.timestamp) || ""));
+  if (!points.length) return { ...data, comparisons, daily_trends };
 
   const intervalHours = asNumber(data.settings?.intervalo_horas, 0.25);
   const metaKwtr = asNumber(data.overview.kwtr_meta ?? data.settings?.meta_kwtr, 0.88);
@@ -558,7 +591,6 @@ function scopeDashboardDataToAnalyzedDate(data: DashboardData): DashboardData {
         hora_pico: overview.hora_pico,
         carbono_ton: overview.carbono_ton,
       },
-      // Insights vindos do n8n podem representar o CSV inteiro. O frontend recalcula os insights principais do dia.
       insights: [],
     },
   };
@@ -593,7 +625,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
     }
 
-    const data = scopeDashboardDataToAnalyzedDate(normalize(payload));
+    const data = scopeDashboardData(normalize(payload), getDashboardPeriod());
 
     if (!data.overview || Object.keys(data.overview).length === 0) {
       throw new Error(`Resposta sem overview em ${url}`);
@@ -692,8 +724,9 @@ export async function postDashboardCsv(file: File): Promise<unknown> {
 }
 
 export function useDashboardData() {
+  const period = useDashboardPeriod();
   return useQuery({
-    queryKey: ["dashboard-data", "daily", DASHBOARD_DATA_URL],
+    queryKey: ["dashboard-data", period, DASHBOARD_DATA_URL],
     queryFn: getDashboardData,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 60 * 1000,

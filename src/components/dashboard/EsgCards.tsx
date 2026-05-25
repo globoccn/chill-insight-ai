@@ -31,15 +31,29 @@ function scoreFromDeviation(deviation?: number | null) {
   return Math.max(0, Math.min(100, Math.round(100 - Math.max(0, deviation) * 3)));
 }
 
+function scoreFromValue(value?: number | null, reference?: number | null, goodWhen: "down" | "up" = "down") {
+  if (!value || !reference) return 0;
+  const ratio = value / reference;
+  const score = goodWhen === "down" ? 100 - Math.max(0, ratio - 1) * 100 : ratio * 100;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function scoreStatus(score: number) {
+  if (score >= 85) return "Muito Bom";
+  if (score >= 70) return "Bom";
+  if (score > 0) return "Atenção";
+  return "Sem dados";
+}
+
 export function PerformanceEsgCard({ data }: { data: DashboardData }) {
   const o = data.overview;
   const score = scoreFromDeviation(o.desvio_meta_kwtr);
-  const carbonScore = o.carbono_ton ? 85 : 0;
+  const carbonScore = scoreFromValue(o.carbono_ton, Number(data.settings?.meta_co2_mes_ton ?? data.settings?.meta_co2_dia_ton ?? 1), "down");
 
   const items = [
-    { label: "Carbono", value: formatNumber(o.carbono_ton, 3), unit: "tCO₂e", target: "Fator nacional provisório", pct: carbonScore, color: COLORS.carbon },
+    { label: "Carbono", value: formatNumber(o.carbono_ton, 3), unit: "tCO₂e", target: "Fator nacional", pct: carbonScore, color: COLORS.carbon },
     { label: "Intensidade energética", value: formatNumber(o.kwtr_medio, 3), unit: "kW/TR", target: `Meta: ≤ ${formatNumber(o.kwtr_meta, 2)}`, pct: score, color: COLORS.efficiency },
-    { label: "Desvio da meta", value: formatNumber(o.desvio_meta_kwtr, 2), unit: "%", target: "Meta provisória configurável", pct: score, color: COLORS.esg },
+    { label: "Desvio da meta", value: formatNumber(o.desvio_meta_kwtr, 2), unit: "%", target: "Meta configurável", pct: score, color: COLORS.esg },
     { label: "COP médio", value: formatNumber(o.cop_medio, 2), unit: "", target: "Calculado por 3,516/kWTR", pct: Math.max(0, Math.min(100, Number(o.cop_medio ?? 0) * 20)), color: COLORS.efficiency },
   ];
 
@@ -107,12 +121,18 @@ export function ConsumptionByPeriodCard({ data }: { data: DashboardData }) {
 export function HealthScoreCard({ data }: { data: DashboardData }) {
   const deviation = data.overview.desvio_meta_kwtr ?? null;
   const baseScore = scoreFromDeviation(deviation);
+  const onlineCount = data.chillers.filter((c) => c.online || c.status === "Online").length;
+  const operationScore = data.chillers.length ? Math.round((onlineCount / data.chillers.length) * 100) : 0;
+  const expectedDailyPoints = 96;
+  const stabilityScore = Math.min(100, Math.round((data.analytics.series_15min.length / expectedDailyPoints) * 100));
+  const carbonScore = scoreFromValue(data.overview.carbono_ton, Number(data.settings?.meta_co2_mes_ton ?? data.settings?.meta_co2_dia_ton ?? 1), "down");
+
   const healthScores = [
-    { label: "Energia", value: baseScore, status: baseScore >= 85 ? "Muito Bom" : baseScore >= 70 ? "Bom" : "Atenção" },
-    { label: "Eficiência", value: baseScore, status: baseScore >= 85 ? "Muito Bom" : baseScore >= 70 ? "Bom" : "Atenção" },
-    { label: "Carbono", value: data.overview.carbono_ton ? 85 : 0, status: "Estimado" },
-    { label: "Operação", value: data.chillers.some((c) => c.online) ? 82 : 0, status: data.chillers.some((c) => c.online) ? "Bom" : "Standby" },
-    { label: "Estabilidade", value: data.analytics.series_15min.length ? 78 : 0, status: "Dados" },
+    { label: "Energia", value: baseScore, status: scoreStatus(baseScore) },
+    { label: "Eficiência", value: baseScore, status: scoreStatus(baseScore) },
+    { label: "Carbono", value: carbonScore, status: data.overview.carbono_ton ? "Estimado" : "Sem dados" },
+    { label: "Operação", value: operationScore, status: data.chillers.length ? `${onlineCount}/${data.chillers.length} online` : "Sem dados" },
+    { label: "Estabilidade", value: stabilityScore, status: data.analytics.series_15min.length ? `${data.analytics.series_15min.length} pontos` : "Sem dados" },
   ];
 
   return (

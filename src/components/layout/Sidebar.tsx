@@ -8,6 +8,7 @@ import {
   Settings,
   Gauge,
 } from "lucide-react";
+import { useDashboardData } from "@/lib/dashboard-data";
 
 const nav = [
   { to: "/",         label: "Overview",  icon: LayoutDashboard },
@@ -18,8 +19,23 @@ const nav = [
   { to: "/settings", label: "Settings",  icon: Settings },
 ] as const;
 
+function scoreFromDeviation(deviation?: number | null) {
+  if (deviation === null || deviation === undefined) return 0;
+  return Math.max(0, Math.min(100, Math.round(100 - Math.max(0, deviation) * 3)));
+}
+
+function scoreLabel(score: number) {
+  if (score >= 85) return "Muito Bom";
+  if (score >= 70) return "Bom";
+  if (score > 0) return "Atenção";
+  return "Sem dados";
+}
+
 export function Sidebar() {
   const { pathname } = useLocation();
+  const { data } = useDashboardData();
+  const score = scoreFromDeviation(data?.overview.desvio_meta_kwtr ?? null);
+  const label = scoreLabel(score);
 
   return (
     <aside className="hidden lg:flex w-[244px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -72,15 +88,15 @@ export function Sidebar() {
                 strokeWidth="8"
                 strokeLinecap="round"
                 fill="none"
-                strokeDasharray={`${(85 / 100) * 276} 276`}
+                strokeDasharray={`${(score / 100) * 276} 276`}
               />
             </svg>
             <div className="text-center">
-              <div className="text-3xl font-semibold tracking-tight">85</div>
+              <div className="text-3xl font-semibold tracking-tight">{score || "—"}</div>
               <div className="text-[10px] text-muted-foreground">/100</div>
             </div>
           </div>
-          <div className="mt-2 text-sm font-medium text-efficiency">Muito Bom</div>
+          <div className="mt-2 text-sm font-medium text-efficiency">{label}</div>
           <div className="mt-1 text-[11px] text-muted-foreground">Dados reais n8n</div>
         </div>
       </div>

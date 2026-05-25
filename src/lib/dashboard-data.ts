@@ -138,10 +138,42 @@ export function pointTime(value?: string | null) {
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
+function unwrapDashboardPayload(payload: unknown): unknown {
+  let current = parseMaybeJson(payload);
+
+  // n8n às vezes retorna: [{ json: {...} }], [{ value: "{...}" }] ou [{ data: {...} }]
+  if (Array.isArray(current)) {
+    current = current[0] ?? null;
+  }
+
+  current = parseMaybeJson(current);
+
+  if (current && typeof current === "object") {
+    const obj = current as Record<string, unknown>;
+
+    if ("json" in obj) return unwrapDashboardPayload(obj.json);
+    if ("value" in obj) return unwrapDashboardPayload(obj.value);
+    if ("data" in obj) return unwrapDashboardPayload(obj.data);
+    if ("body" in obj) return unwrapDashboardPayload(obj.body);
+  }
+
+  return current;
+}
+
 function normalize(payload: unknown): DashboardData {
-  if (!payload || typeof payload !== "object") return emptyData;
-  const maybe = payload as Partial<DashboardData> | { data?: Partial<DashboardData> };
-  const data = "data" in maybe && maybe.data ? maybe.data : maybe;
+  const data = unwrapDashboardPayload(payload) as Partial<DashboardData> | null;
+  if (!data || typeof data !== "object") return emptyData;
 
   return {
     settings: data.settings ?? {},
@@ -269,20 +301,48 @@ export function buildConsumptionByPeriod(data: DashboardData) {
 }
 
 export function buildInsights(data: DashboardData) {
+  const o = data.overview ?? {};
+  const items: Array<{ icon: string; text: string }> = [];
+
+  const kwtrMedio = Number(o.kwtr_medio);
+  const kwtrMeta = Number(o.kwtr_meta ?? data.settings?.meta_kwtr ?? 0.88);
+
+  if (Number.isFinite(kwtrMedio) && Number.isFinite(kwtrMeta) && kwtrMeta > 0) {
+    const deviation = ((kwtrMedio - kwtrMeta) / kwtrMeta) * 100;
+    const pct = Math.abs(deviation);
+
+    if (deviation <= 0) {
+      items.push({
+        icon: "leaf",
+        text: `CAG operando ${formatNumber(pct, 2)}% melhor que a meta de eficiência (${formatNumber(kwtrMeta, 2)} kW/TR). Eficiência média do período: ${formatNumber(kwtrMedio, 3)} kW/TR.`,
+      });
+    } else {
+      items.push({
+        icon: "trend",
+        text: `CAG operando ${formatNumber(pct, 2)}% acima da meta de eficiência (${formatNumber(kwtrMeta, 2)} kW/TR). Eficiência média do período: ${formatNumber(kwtrMedio, 3)} kW/TR.`,
+      });
+    }
+  }
+
   const fromReports = data.reports?.insights?.map((it) => ({
     icon: it.type === "thermal" ? "drop" : it.type === "demand" ? "bolt" : it.type === "efficiency" ? "trend" : "leaf",
-    text: `${it.title ?? "Insight"}: ${it.message ?? ""}`,
+    text: `${it.title ?? "Insight"}${it.message ? `: ${it.message}` : ""}`,
   })) ?? [];
 
-  if (fromReports.length) return fromReports;
+  const reportInsightsWithoutGenericEfficiency = fromReports.filter((it) => {
+    const normalized = it.text.toLowerCase();
+    return !(normalized.includes("eficiência") && normalized.includes("meta"));
+  });
 
-  const o = data.overview;
-  const items = [];
-  if (o.kwtr_medio !== undefined && o.kwtr_meta !== undefined) {
-    const ok = Number(o.kwtr_medio) <= Number(o.kwtr_meta);
-    items.push({ icon: ok ? "leaf" : "trend", text: ok ? `Eficiência média dentro da meta (${formatNumber(o.kwtr_medio, 3)} kW/TR).` : `Eficiência acima da meta (${formatNumber(o.kwtr_medio, 3)} kW/TR).` });
+  items.push(...reportInsightsWithoutGenericEfficiency);
+
+  if (o.hora_pico) {
+    items.push({ icon: "bolt", text: `Pico de demanda em ${formatDateTime(o.hora_pico)} com ${formatNumber(o.pico_kw)} kW.` });
   }
-  if (o.hora_pico) items.push({ icon: "bolt", text: `Pico de demanda em ${formatDateTime(o.hora_pico)} com ${formatNumber(o.pico_kw)} kW.` });
-  if (o.deltaT_evap_medio !== undefined) items.push({ icon: "drop", text: `Delta-T médio do evaporador: ${formatNumber(o.deltaT_evap_medio, 2)} °C.` });
+
+  if (o.deltaT_evap_medio !== undefined && o.deltaT_evap_medio !== null) {
+    items.push({ icon: "drop", text: `Delta-T médio do evaporador: ${formatNumber(o.deltaT_evap_medio, 2)} °C.` });
+  }
+
   return items;
 }

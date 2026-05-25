@@ -5,7 +5,7 @@ import { CentralBehaviorChart } from "@/components/dashboard/CentralBehaviorChar
 import { ChillersTable } from "@/components/dashboard/ChillersTable";
 import { PerformanceEsgCard } from "@/components/dashboard/EsgCards";
 import { InsightsCard } from "@/components/dashboard/InsightsCard";
-import { buildKpis, formatDateTime, formatNumber, useDashboardData } from "@/lib/dashboard-data";
+import { buildInsights, buildKpis, formatDateTime, formatNumber, useDashboardData } from "@/lib/dashboard-data";
 import { Download, FileText } from "lucide-react";
 
 export const Route = createFileRoute("/reports")({
@@ -66,12 +66,8 @@ function ReportsPage() {
         <div className="glass-card rounded-2xl p-5">
           <h3 className="text-[15px] font-semibold tracking-tight">Recomendações operacionais</h3>
           <ul className="mt-3 space-y-2 text-sm">
-            {(data.reports?.insights?.length ? data.reports.insights.map((i) => i.message || i.title || "Insight operacional") : [
-              "Revisar balanceamento entre chillers com maior participação de consumo.",
-              "Validar Delta-T em períodos de baixa carga.",
-              "Manter acompanhamento diário do kW/TR contra a meta provisória.",
-            ]).map((r, i) => (
-              <li key={i} className="flex gap-2 text-foreground/85"><span className="text-efficiency">•</span> {r}</li>
+            {buildInsights(data).map((r, i) => (
+              <li key={i} className="flex gap-2 text-foreground/85"><span className="text-efficiency">•</span> {r.text}</li>
             ))}
           </ul>
         </div>

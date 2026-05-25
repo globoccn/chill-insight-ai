@@ -11,10 +11,11 @@ export const N8N_DASHBOARD_DATA_URL = `${n8nBaseUrl}/dashboard-data`;
 export const N8N_SETTINGS_URL = `${n8nBaseUrl}/dashboard-settings`;
 export const N8N_UPLOAD_WEBHOOK_URL = `${n8nBaseUrl}/dados-globo-vm22`;
 
-// Em deploy estático o /api/dashboard pode não existir. Por isso o padrão é
-// consumir o webhook GET /dashboard-data diretamente no n8n.
-export const DASHBOARD_DATA_URL =
-  import.meta.env.VITE_DASHBOARD_DATA_URL || N8N_DASHBOARD_DATA_URL;
+// Padrão correto em produção: o browser chama o backend do próprio dashboard.
+// O server.ts então faz proxy para o n8n. Isso evita bloqueio de CORS.
+export const DASHBOARD_DATA_URL = import.meta.env.VITE_DASHBOARD_DATA_URL || "/api/dashboard";
+export const SETTINGS_URL = import.meta.env.VITE_SETTINGS_URL || "/api/settings";
+export const UPLOAD_URL = import.meta.env.VITE_UPLOAD_URL || "/api/dashboard/upload";
 
 export type ChillerStatus = "Online" | "Standby" | "Alarm" | string;
 
@@ -210,26 +211,49 @@ async function readResponsePayload(response: Response): Promise<unknown> {
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const response = await fetch(DASHBOARD_DATA_URL, {
-    method: "GET",
-    headers: { accept: "application/json,text/plain,*/*" },
-    cache: "no-store",
-  });
+  async function fetchAndNormalize(url: string): Promise<DashboardData> {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { accept: "application/json,text/plain,*/*" },
+      cache: "no-store",
+    });
 
-  const payload = await readResponsePayload(response);
+    const payload = await readResponsePayload(response);
 
-  if (!response.ok) {
-    throw new Error(`Falha ao buscar dashboard: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`Falha ao buscar dashboard em ${url}: ${response.status}`);
+    }
+
+    if (payload && typeof payload === "object" && "error" in (payload as Record<string, unknown>)) {
+      throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
+    }
+
+    const data = normalize(payload);
+
+    if (!data.overview || Object.keys(data.overview).length === 0) {
+      throw new Error(`Resposta sem overview em ${url}`);
+    }
+
+    return data;
   }
 
-  const data = normalize(payload);
+  try {
+    return await fetchAndNormalize(DASHBOARD_DATA_URL);
+  } catch (proxyError) {
+    // Fallback útil em preview/local quando o /api do dashboard não está ativo.
+    // Em produção normal, o /api deve funcionar e evitar CORS.
+    if (DASHBOARD_DATA_URL !== N8N_DASHBOARD_DATA_URL) {
+      try {
+        return await fetchAndNormalize(N8N_DASHBOARD_DATA_URL);
+      } catch (directError) {
+        throw new Error(
+          `Não foi possível carregar dados reais. Proxy: ${(proxyError as Error).message}. Direto n8n: ${(directError as Error).message}`,
+        );
+      }
+    }
 
-  // Evita exibir tela vazia quando o n8n retornar erro estruturado.
-  if ((payload as { error?: unknown } | null)?.error) {
-    throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
+    throw proxyError;
   }
-
-  return data;
 }
 
 export async function postDashboardCsv(file: File): Promise<unknown> {
@@ -237,7 +261,7 @@ export async function postDashboardCsv(file: File): Promise<unknown> {
   formData.append("file", file);
   formData.append("source", "dashboard-upload");
 
-  const response = await fetch(N8N_UPLOAD_WEBHOOK_URL, {
+  const response = await fetch(UPLOAD_URL, {
     method: "POST",
     body: formData,
   });

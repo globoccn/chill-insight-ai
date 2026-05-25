@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { N8N_SETTINGS_URL } from "@/lib/dashboard-data";
+import { N8N_SETTINGS_URL, SETTINGS_URL } from "@/lib/dashboard-data";
 
 export interface DashboardSettings {
   meta_kwtr: number;
@@ -59,7 +59,7 @@ export function normalizeSettings(value: Partial<DashboardSettings> | null | und
 }
 
 export async function getSettings(): Promise<DashboardSettings> {
-  const response = await fetch(N8N_SETTINGS_URL, {
+  const response = await fetch(SETTINGS_URL, {
     method: "GET",
     headers: { accept: "application/json,text/plain,*/*" },
     cache: "no-store",
@@ -75,7 +75,7 @@ export async function getSettings(): Promise<DashboardSettings> {
 }
 
 export async function saveSettings(settings: DashboardSettings): Promise<{ success: boolean; source?: string }> {
-  const response = await fetch(N8N_SETTINGS_URL, {
+  const response = await fetch(SETTINGS_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(settings),

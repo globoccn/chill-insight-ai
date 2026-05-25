@@ -74,7 +74,7 @@ export async function getSettings(): Promise<DashboardSettings> {
   return normalizeSettings(payload?.settings ?? payload);
 }
 
-export async function saveSettings(settings: DashboardSettings): Promise<{ success: boolean; source?: string }> {
+export async function saveSettings(settings: DashboardSettings): Promise<{ success: boolean; source?: string; saved?: DashboardSettings; persisted?: DashboardSettings }> {
   const response = await fetch(SETTINGS_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -87,7 +87,12 @@ export async function saveSettings(settings: DashboardSettings): Promise<{ succe
   }
 
   const text = await response.text();
-  return text ? JSON.parse(text) : { success: true };
+  const payload = text ? JSON.parse(text) : { success: true };
+  return {
+    ...payload,
+    saved: payload.saved ? normalizeSettings(payload.saved) : undefined,
+    persisted: payload.persisted ? normalizeSettings(payload.persisted?.settings ?? payload.persisted) : undefined,
+  };
 }
 
 export function useSettings() {

@@ -172,9 +172,14 @@ function SettingsPage() {
 
   const handleSave = async () => {
     setSavedMessage(null);
-    const result = await saveSettings.mutateAsync(settings);
+    const payload = normalizeSettings(settings);
+    const result = await saveSettings.mutateAsync(payload);
+    const confirmed = result.persisted ?? result.saved ?? payload;
+    setSettings(normalizeSettings(confirmed));
     setSavedMessage(
-      "Settings enviadas para o workflow n8n /dashboard-settings. O n8n deve gravar em cag:settings no Redis.",
+      result.persisted
+        ? "Settings salvas e confirmadas no Redis cag:settings."
+        : "Settings enviadas ao n8n. Não foi possível confirmar leitura imediata do Redis pelo dashboard.",
     );
   };
 

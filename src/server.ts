@@ -38,6 +38,111 @@ function getN8nBaseUrl(env: unknown): string {
   ).replace(/\/+$/, "");
 }
 
+
+const DEFAULT_SETTINGS_PAYLOAD = {
+  meta_kwtr: 0.88,
+  area_climatizada_m2: null,
+  fator_carbono_kgco2_kwh: 0.0385,
+  intervalo_horas: 0.25,
+  deltaT_evap_min: 4,
+  deltaT_evap_ideal: 5.5,
+  limite_kw_pico: null,
+  tarifa_kwh: null,
+  baseline_kwh_dia: null,
+  meta_kwh_mes: null,
+  meta_co2_mes_ton: null,
+  horario_operacional_inicio: "08:00",
+  horario_operacional_fim: "18:00",
+  unidade_vazao: "m³/h",
+  capacidade_nominal_total_tr: null,
+  chiller_names: {
+    ur1: "UR1",
+    ur2: "UR2",
+    ur3: "UR3",
+  },
+};
+
+function normalizeSettingsPayload(input: unknown) {
+  const body = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const chillerNames = body.chiller_names && typeof body.chiller_names === "object"
+    ? (body.chiller_names as Record<string, unknown>)
+    : {};
+
+  return {
+    ...DEFAULT_SETTINGS_PAYLOAD,
+    ...body,
+    chiller_names: {
+      ...DEFAULT_SETTINGS_PAYLOAD.chiller_names,
+      ...chillerNames,
+    },
+  };
+}
+
+async function postSettingsToN8n(request: Request, env: unknown): Promise<Response> {
+  let payload: unknown = {};
+
+  try {
+    const text = await request.text();
+    payload = text ? JSON.parse(text) : {};
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: true, message: "JSON inválido recebido em /api/settings", detail: error instanceof Error ? error.message : String(error) }),
+      { status: 400, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+    );
+  }
+
+  const normalized = normalizeSettingsPayload(payload);
+  const target = `${getN8nBaseUrl(env)}/dashboard-settings`;
+
+  const saveResponse = await fetch(target, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json,text/plain,*/*",
+    },
+    body: JSON.stringify(normalized),
+  });
+
+  const saveText = await saveResponse.text().catch(() => "");
+
+  if (!saveResponse.ok) {
+    return new Response(
+      JSON.stringify({
+        error: true,
+        message: "n8n recusou o POST /dashboard-settings",
+        status: saveResponse.status,
+        detail: saveText,
+        sent: normalized,
+      }),
+      { status: saveResponse.status, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+    );
+  }
+
+  // Validação pós-salvamento: lê novamente o webhook GET para confirmar o que ficou no Redis.
+  let persisted: unknown = null;
+  try {
+    const verifyResponse = await fetch(`${target}?_=${Date.now()}`, {
+      method: "GET",
+      headers: { accept: "application/json,text/plain,*/*" },
+    });
+    const verifyText = await verifyResponse.text();
+    persisted = verifyText ? JSON.parse(verifyText) : null;
+  } catch {
+    persisted = null;
+  }
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      source: "n8n",
+      saved: normalized,
+      persisted,
+      n8nResponse: saveText ? (() => { try { return JSON.parse(saveText); } catch { return saveText; } })() : null,
+    }),
+    { status: 200, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+  );
+}
+
 function jsonHeaders(extra?: HeadersInit) {
   const headers = new Headers(extra);
   headers.set("access-control-allow-origin", "*");
@@ -97,7 +202,9 @@ async function handleSettingsRequest(request: Request, env: unknown): Promise<Re
   }
 
   // Settings são salvas/lidas pelo n8n em cag:settings.
-  return proxyToN8n(request, env, "dashboard-settings", request.method);
+  // POST recebe tratamento explícito para garantir payload JSON limpo e validar persistência.
+  if (request.method === "POST") return postSettingsToN8n(request, env);
+  return proxyToN8n(request, env, "dashboard-settings", "GET");
 }
 
 async function handleUploadRequest(request: Request, env: unknown): Promise<Response> {

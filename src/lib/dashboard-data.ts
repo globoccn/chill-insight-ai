@@ -313,17 +313,38 @@ export function buildKpis(data: DashboardData): DashboardKpi[] {
   ];
 }
 
+function chartLabel(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value.slice(0, 16);
+  return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function positiveOrNull(value: unknown) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export function buildChartSeries(data: DashboardData) {
   let cumulative = 0;
+
   return data.analytics.series_15min.map((p) => {
+    const kw = positiveOrNull(p.kw_total);
+    const tr = positiveOrNull(p.tr_total);
+    const hasOperation = kw !== null && tr !== null;
+
     cumulative += Number(p.kwh_total ?? 0);
+
     return {
+      label: chartLabel(p.timestamp),
       time: pointTime(p.timestamp),
-      kW: p.kw_total ?? null,
-      trh: p.tr_total ?? null,
-      kwPerTr: p.kwtr_real ?? null,
-      deltaT: p.deltaT_evap_medio ?? null,
-      extTemp: p.oat ?? null,
+      timestamp: p.timestamp,
+      // Valores zerados viram null para quebrar a linha, não para desenhar queda falsa até zero.
+      kW: kw,
+      trh: tr,
+      kwPerTr: hasOperation ? positiveOrNull(p.kwtr_real) : null,
+      deltaT: hasOperation ? positiveOrNull(p.deltaT_evap_medio) : null,
+      extTemp: positiveOrNull(p.oat),
       cumulative: Number(cumulative.toFixed(2)),
     };
   });

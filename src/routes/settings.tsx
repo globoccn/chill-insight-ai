@@ -46,12 +46,14 @@ function Field({
   value,
   unit,
   onChange,
+  onBlur,
   placeholder,
 }: {
   label: string;
   value: string;
   unit?: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
 }) {
   return (
@@ -62,11 +64,59 @@ function Field({
           value={value}
           placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+          inputMode="decimal"
           className="w-full bg-transparent px-3.5 py-2.5 text-sm outline-none placeholder:text-muted-foreground/50"
         />
         {unit && <span className="pr-3 text-xs text-muted-foreground">{unit}</span>}
       </div>
     </label>
+  );
+}
+
+function NumericField({
+  label,
+  value,
+  unit,
+  onCommit,
+  placeholder,
+}: {
+  label: string;
+  value: number | null | undefined;
+  unit?: string;
+  onCommit: (value: string) => void;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState(toInputValue(value));
+
+  useEffect(() => {
+    setDraft(toInputValue(value));
+  }, [value]);
+
+  const commit = () => {
+    onCommit(draft);
+  };
+
+  const handleChange = (next: string) => {
+    setDraft(next);
+
+    const trimmed = next.trim();
+    // Permite digitar vírgula decimal sem o React transformar "0," em "0".
+    // Assim campos como tarifa aceitam naturalmente "0,49".
+    if (!trimmed || !/[,.]$/.test(trimmed)) {
+      onCommit(next);
+    }
+  };
+
+  return (
+    <Field
+      label={label}
+      value={draft}
+      unit={unit}
+      placeholder={placeholder}
+      onChange={handleChange}
+      onBlur={commit}
+    />
   );
 }
 
@@ -173,90 +223,90 @@ function SettingsPage() {
       </Card>
 
       <Card title="Carbono & Energia">
-        <Field
+        <NumericField
           label="Fator nacional de emissão de carbono"
-          value={toInputValue(settings.fator_carbono_kgco2_kwh)}
+          value={settings.fator_carbono_kgco2_kwh}
           unit="kgCO₂e/kWh"
-          onChange={(value) => setNumber("fator_carbono_kgco2_kwh", value)}
+          onCommit={(value) => setNumber("fator_carbono_kgco2_kwh", value)}
         />
-        <Field
+        <NumericField
           label="Tarifa de energia"
-          value={toInputValue(settings.tarifa_kwh)}
+          value={settings.tarifa_kwh}
           unit="R$/kWh"
           placeholder="A definir"
-          onChange={(value) => setNumber("tarifa_kwh", value)}
+          onCommit={(value) => setNumber("tarifa_kwh", value)}
         />
-        <Field
+        <NumericField
           label="Baseline energético diário"
-          value={toInputValue(settings.baseline_kwh_dia)}
+          value={settings.baseline_kwh_dia}
           unit="kWh"
           placeholder="A definir"
-          onChange={(value) => setNumber("baseline_kwh_dia", value)}
+          onCommit={(value) => setNumber("baseline_kwh_dia", value)}
         />
-        <Field
+        <NumericField
           label="Intervalo de coleta"
-          value={toInputValue(settings.intervalo_horas)}
+          value={settings.intervalo_horas}
           unit="h"
-          onChange={(value) => setNumber("intervalo_horas", value)}
+          onCommit={(value) => setNumber("intervalo_horas", value)}
         />
       </Card>
 
       <Card title="Metas ESG e Operação">
-        <Field
+        <NumericField
           label="Eficiência meta"
-          value={toInputValue(settings.meta_kwtr)}
+          value={settings.meta_kwtr}
           unit="kW/TR"
-          onChange={(value) => setNumber("meta_kwtr", value)}
+          onCommit={(value) => setNumber("meta_kwtr", value)}
         />
-        <Field
+        <NumericField
           label="Meta mensal de CO₂e"
-          value={toInputValue(settings.meta_co2_mes_ton)}
+          value={settings.meta_co2_mes_ton}
           unit="tCO₂e"
           placeholder="A definir"
-          onChange={(value) => setNumber("meta_co2_mes_ton", value)}
+          onCommit={(value) => setNumber("meta_co2_mes_ton", value)}
         />
-        <Field
+        <NumericField
           label="Delta-T mínimo aceitável"
-          value={toInputValue(settings.deltaT_evap_min)}
+          value={settings.deltaT_evap_min}
           unit="°C"
-          onChange={(value) => setNumber("deltaT_evap_min", value)}
+          onCommit={(value) => setNumber("deltaT_evap_min", value)}
         />
-        <Field
+        <NumericField
           label="Delta-T ideal"
-          value={toInputValue(settings.deltaT_evap_ideal)}
+          value={settings.deltaT_evap_ideal}
           unit="°C"
-          onChange={(value) => setNumber("deltaT_evap_ideal", value)}
+          onCommit={(value) => setNumber("deltaT_evap_ideal", value)}
         />
-        <Field
+        <NumericField
           label="Limite pico de demanda"
-          value={toInputValue(settings.limite_kw_pico)}
+          value={settings.limite_kw_pico}
           unit="kW"
           placeholder="A definir"
-          onChange={(value) => setNumber("limite_kw_pico", value)}
+          onCommit={(value) => setNumber("limite_kw_pico", value)}
         />
-        <Field
+        <NumericField
           label="Meta mensal de consumo"
-          value={toInputValue(settings.meta_kwh_mes)}
+          value={settings.meta_kwh_mes}
           unit="kWh"
           placeholder="A definir"
-          onChange={(value) => setNumber("meta_kwh_mes", value)}
+          onCommit={(value) => setNumber("meta_kwh_mes", value)}
         />
       </Card>
 
       <Card title="Edifício">
-        <Field
+        <NumericField
           label="Área climatizada"
-          value={toInputValue(settings.area_climatizada_m2)}
+          value={settings.area_climatizada_m2}
           unit="m²"
           placeholder="A definir"
-          onChange={(value) => setNumber("area_climatizada_m2", value)}
+          onCommit={(value) => setNumber("area_climatizada_m2", value)}
         />
-        <Field
+        <NumericField
           label="Capacidade nominal total"
-          value={toInputValue(settings.capacidade_nominal_total_tr)}
+          value={settings.capacidade_nominal_total_tr}
           unit="TR"
           placeholder="Opcional"
-          onChange={(value) => setNumber("capacidade_nominal_total_tr", value)}
+          onCommit={(value) => setNumber("capacidade_nominal_total_tr", value)}
         />
         <Field
           label="Horário operacional início"

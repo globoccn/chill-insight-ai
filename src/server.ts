@@ -51,16 +51,23 @@ async function proxyToN8n(request: Request, env: unknown, path: string, method?:
   const target = new URL(`${getN8nBaseUrl(env)}/${path.replace(/^\/+/, "")}`);
   target.search = incomingUrl.search;
 
-  const headers = new Headers(request.headers);
-  headers.delete("host");
-
   const finalMethod = method ?? request.method;
   const hasBody = !["GET", "HEAD"].includes(finalMethod.toUpperCase());
+
+  // Não repassamos todos os headers do browser para o n8n.
+  // Host/content-length/encoding podem quebrar POST em alguns runtimes.
+  const headers = new Headers();
+  const contentType = request.headers.get("content-type");
+  const accept = request.headers.get("accept");
+  if (contentType) headers.set("content-type", contentType);
+  if (accept) headers.set("accept", accept);
+
+  const bodyText = hasBody ? await request.clone().text() : undefined;
 
   const response = await fetch(target.toString(), {
     method: finalMethod,
     headers,
-    body: hasBody ? request.body : undefined,
+    body: hasBody ? bodyText : undefined,
   });
 
   const responseHeaders = jsonHeaders(response.headers);

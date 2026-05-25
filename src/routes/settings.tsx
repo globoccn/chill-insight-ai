@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { PageTitle } from "@/components/layout/PageTitle";
 import { DASHBOARD_DATA_URL, N8N_API_BASE_URL, N8N_UPLOAD_WEBHOOK_URL } from "@/lib/dashboard-data";
 import {
+  areSettingsEquivalent,
   DashboardSettings,
   DEFAULT_DASHBOARD_SETTINGS,
   normalizeSettings,
@@ -183,10 +184,21 @@ function SettingsPage() {
     setSavedMessage(null);
     const payload = normalizeSettings(settings);
     const result = await saveSettings.mutateAsync(payload);
-    const confirmed = result.persisted ?? result.saved ?? payload;
-    setSettings(normalizeSettings(confirmed));
+    const saved = normalizeSettings(result.saved ?? payload);
+    const persisted = result.persisted ? normalizeSettings(result.persisted) : undefined;
+    const confirmed = persisted && areSettingsEquivalent(saved, persisted) ? persisted : saved;
+
+    setSettings(confirmed);
+
+    if (persisted && !areSettingsEquivalent(saved, persisted)) {
+      setSavedMessage(
+        `Settings enviadas, mas a leitura imediata do Redis ainda retornou outro valor. Mantive o valor salvo na tela. Verifique o workflow POST /dashboard-settings: ele pode não estar gravando cag:settings com o body recebido.`,
+      );
+      return;
+    }
+
     setSavedMessage(
-      result.persisted
+      persisted
         ? `Settings salvas e confirmadas no Redis cag:settings via ${result.source ?? result.endpoint ?? "endpoint configurado"}.`
         : `Settings enviadas via ${result.source ?? result.endpoint ?? "endpoint configurado"}. Não foi possível confirmar leitura imediata do Redis pelo dashboard.`,
     );

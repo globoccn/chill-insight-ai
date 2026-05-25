@@ -56,6 +56,8 @@ type SaveSettingsResult = {
   persisted?: DashboardSettings;
   endpoint?: string;
   n8nResponse?: unknown;
+  persistenceConfirmed?: boolean;
+  persistenceMismatch?: boolean;
 };
 
 const NUMERIC_KEYS = [
@@ -73,14 +75,40 @@ const NUMERIC_KEYS = [
   "capacidade_nominal_total_tr",
 ] as const satisfies readonly (keyof DashboardSettings)[];
 
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
 function unwrapSettingsPayload(value: unknown): SettingsPayload {
-  if (!value || typeof value !== "object") return {};
+  const parsed = parseMaybeJson(value);
 
-  const payload = value as Record<string, unknown>;
+  if (Array.isArray(parsed)) {
+    return unwrapSettingsPayload(parsed[0]);
+  }
 
-  // O webhook n8n pode responder tanto com o objeto direto quanto com { settings: {...} }.
-  if (payload.settings && typeof payload.settings === "object" && !Array.isArray(payload.settings)) {
-    return payload.settings as SettingsPayload;
+  if (!parsed || typeof parsed !== "object") return {};
+
+  const payload = parsed as Record<string, unknown>;
+
+  // Formatos comuns que podem vir do n8n/proxy:
+  // objeto direto, { settings }, { body }, { data }, { json } ou array com um item.
+  for (const key of ["settings", "body", "data", "json"] as const) {
+    const nested = parseMaybeJson(payload[key]);
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      const nestedPayload = nested as Record<string, unknown>;
+      if (nestedPayload.settings && typeof nestedPayload.settings === "object" && !Array.isArray(nestedPayload.settings)) {
+        return nestedPayload.settings as SettingsPayload;
+      }
+      return nestedPayload as SettingsPayload;
+    }
   }
 
   return payload as SettingsPayload;
@@ -108,6 +136,12 @@ function parseDecimal(value: unknown, fallback: number | null): number | null {
 
 function parseString(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
+}
+
+export function areSettingsEquivalent(a: DashboardSettings, b: DashboardSettings): boolean {
+  const normalizedA = normalizeSettings(a);
+  const normalizedB = normalizeSettings(b);
+  return JSON.stringify(normalizedA) === JSON.stringify(normalizedB);
 }
 
 export function normalizeSettings(value: unknown): DashboardSettings {
@@ -208,13 +242,19 @@ export async function saveSettings(settings: DashboardSettings): Promise<SaveSet
 
       const result = responsePayload && typeof responsePayload === "object" ? (responsePayload as Record<string, unknown>) : {};
 
+      const saved = normalizeSettings(result.saved ?? payload);
+      const persisted = result.persisted ? normalizeSettings(result.persisted) : undefined;
+      const persistenceConfirmed = persisted ? areSettingsEquivalent(saved, persisted) : false;
+
       return {
         ...result,
         success: true,
         endpoint,
         source: typeof result.source === "string" ? result.source : endpoint === N8N_SETTINGS_URL ? "n8n-direct" : "dashboard-proxy",
-        saved: normalizeSettings(result.saved ?? payload),
-        persisted: result.persisted ? normalizeSettings(result.persisted) : undefined,
+        saved,
+        persisted,
+        persistenceConfirmed,
+        persistenceMismatch: Boolean(persisted && !persistenceConfirmed),
         n8nResponse: result.n8nResponse,
       };
     } catch (error) {
@@ -239,8 +279,14 @@ export function useSaveSettings() {
 
   return useMutation({
     mutationFn: saveSettings,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard-settings"] });
+    onSuccess: (result, variables) => {
+      const saved = normalizeSettings(result.saved ?? variables);
+      const confirmed = result.persistenceConfirmed && result.persisted ? result.persisted : saved;
+
+      // Não invalida imediatamente ["dashboard-settings"].
+      // Se o n8n/Redis ainda devolver o valor antigo por alguns ms, o refetch sobrescreve a edição local
+      // e o campo parece “voltar” para 0,88 logo após salvar.
+      queryClient.setQueryData(["dashboard-settings", SETTINGS_URL, N8N_SETTINGS_URL], confirmed);
       queryClient.invalidateQueries({ queryKey: ["dashboard-data"] });
     },
   });

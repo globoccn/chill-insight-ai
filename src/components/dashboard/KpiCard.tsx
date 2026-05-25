@@ -32,7 +32,7 @@ export function KpiCard({ kpi, icon }: { kpi: DashboardKpi; icon?: React.ReactNo
 
       <div className="relative flex items-start justify-between gap-2">
         <span className="line-clamp-1 text-[11px] font-medium text-muted-foreground">{kpi.label}</span>
-        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-white/[0.03]" style={{ color: c }}>
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-foreground/[0.04] dark:bg-white/[0.03]" style={{ color: c }}>
           {icon}
         </span>
       </div>

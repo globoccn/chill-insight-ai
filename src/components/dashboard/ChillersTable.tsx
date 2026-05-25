@@ -40,7 +40,7 @@ export function ChillersTable({ data }: { data: DashboardData }) {
           </thead>
           <tbody>
             {chillers.map((c) => (
-              <tr key={c.id} className="border-t border-white/[0.06]">
+              <tr key={c.id} className="border-t border-border/70 dark:border-white/[0.06]">
                 <td className="py-2.5 font-semibold">{c.name}</td>
                 <td>
                   <span className="inline-flex items-center gap-1.5">
@@ -55,14 +55,14 @@ export function ChillersTable({ data }: { data: DashboardData }) {
                 <td className="pr-1">
                   <div className="flex items-center justify-end gap-2">
                     <span className="w-10 text-right tabular-nums font-medium">{formatNumber(c.kwtr, 2)}</span>
-                    <div className="h-1.5 w-12 overflow-hidden rounded-full bg-white/[0.08]">
+                    <div className="h-1.5 w-12 overflow-hidden rounded-full bg-foreground/[0.08] dark:bg-white/[0.08]">
                       <div className="h-full rounded-full" style={effBar(c.kwtr)} />
                     </div>
                   </div>
                 </td>
               </tr>
             ))}
-            <tr className="border-t border-white/[0.10]">
+            <tr className="border-t border-border dark:border-white/[0.10]">
               <td className="py-2.5 font-semibold text-efficiency">Total</td>
               <td />
               <td className="text-right font-semibold tabular-nums">{formatNumber(data.overview.kwh_total)}</td>

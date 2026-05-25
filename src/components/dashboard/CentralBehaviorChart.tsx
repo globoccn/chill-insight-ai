@@ -28,7 +28,7 @@ export function CentralBehaviorChart({ data }: { data: DashboardData }) {
           </h3>
           <div className="mt-1 text-[11px] text-muted-foreground">kW / TR • kW/TR • Delta-T • Temperatura externa • Consumo acumulado</div>
         </div>
-        <button className="rounded-lg border border-border/70 bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground shadow-inner">15 minutos</button>
+        <button className="rounded-lg border border-border/70 bg-foreground/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground shadow-inner">15 minutos</button>
       </div>
 
       <div className="chart-stage mt-3 h-[310px] rounded-xl">
@@ -73,38 +73,38 @@ export function CentralBehaviorChart({ data }: { data: DashboardData }) {
                   </feMerge>
                 </filter>
               </defs>
-              <CartesianGrid stroke="rgba(148,163,184,.085)" strokeDasharray="3 8" vertical={true} />
-              <XAxis dataKey="label" stroke="rgba(203,213,225,.62)" tick={{ fontSize: 10, fill: "rgba(203,213,225,.72)" }} interval="preserveStartEnd" minTickGap={42} axisLine={{ stroke: "rgba(148,163,184,.18)" }} tickLine={false} />
-              <YAxis yAxisId="kw" stroke="rgba(203,213,225,.56)" tick={{ fontSize: 10, fill: "rgba(203,213,225,.68)" }} width={44} axisLine={{ stroke: "rgba(148,163,184,.18)" }} tickLine={false} />
+              <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 8" vertical={true} />
+              <XAxis dataKey="label" stroke="var(--chart-axis)" tick={{ fontSize: 10, fill: "var(--chart-axis)" }} interval="preserveStartEnd" minTickGap={42} axisLine={{ stroke: "var(--chart-axis-line)" }} tickLine={false} />
+              <YAxis yAxisId="kw" stroke="var(--chart-axis)" tick={{ fontSize: 10, fill: "var(--chart-axis)" }} width={44} axisLine={{ stroke: "var(--chart-axis-line)" }} tickLine={false} />
               <YAxis
                 yAxisId="temp"
                 orientation="right"
-                stroke="rgba(226,232,240,.62)"
-                tick={{ fontSize: 10, fill: "rgba(226,232,240,.72)" }}
-                axisLine={{ stroke: "rgba(148,163,184,.18)" }}
+                stroke="var(--chart-axis)"
+                tick={{ fontSize: 10, fill: "var(--chart-axis)" }}
+                axisLine={{ stroke: "var(--chart-axis-line)" }}
                 tickLine={false}
                 width={38}
                 domain={["dataMin - 2", "dataMax + 2"]}
-                label={{ value: "°C", position: "insideTopRight", fill: "rgba(226,232,240,.55)", fontSize: 10 }}
+                label={{ value: "°C", position: "insideTopRight", fill: "var(--chart-axis)", fontSize: 10 }}
               />
               <YAxis yAxisId="cum" orientation="right" hide domain={["dataMin", "dataMax"]} />
-              {meta > 0 ? <ReferenceLine yAxisId="kw" y={meta} stroke="rgba(255,255,255,.42)" strokeDasharray="6 6" label={{ value: `Meta ${formatNumber(meta, 2)}`, fill: "var(--color-muted-foreground)", fontSize: 10 }} /> : null}
+              {meta > 0 ? <ReferenceLine yAxisId="kw" y={meta} stroke="var(--chart-reference)" strokeDasharray="6 6" label={{ value: `Meta ${formatNumber(meta, 2)}`, fill: "var(--color-muted-foreground)", fontSize: 10 }} /> : null}
               <Tooltip
-                cursor={{ stroke: "rgba(255,255,255,.10)", strokeWidth: 1, strokeDasharray: "4 4" }}
+                cursor={{ stroke: "var(--chart-axis-line)", strokeWidth: 1, strokeDasharray: "4 4" }}
                 contentStyle={{
-                  background: "linear-gradient(180deg, rgba(8,13,24,.98) 0%, rgba(5,10,18,.98) 100%)",
-                  border: "1px solid rgba(94,234,212,.16)",
+                  background: "linear-gradient(180deg, var(--chart-tooltip-bg) 0%, var(--chart-tooltip-bg-2) 100%)",
+                  border: "1px solid var(--chart-tooltip-border)",
                   borderRadius: 18,
                   fontSize: 12,
                   boxShadow: "0 24px 80px rgba(0,0,0,.55)",
                   backdropFilter: "blur(10px)",
                   padding: "12px 14px",
                 }}
-                itemStyle={{ color: "#e5e7eb", paddingTop: 2, paddingBottom: 2 }}
-                labelStyle={{ color: "#ffffff", fontWeight: 700, marginBottom: 8, letterSpacing: ".02em" }}
+                itemStyle={{ color: "var(--chart-tooltip-text)", paddingTop: 2, paddingBottom: 2 }}
+                labelStyle={{ color: "var(--chart-tooltip-label)", fontWeight: 700, marginBottom: 8, letterSpacing: ".02em" }}
                 separator="•"
               />
-              <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4, color: "rgba(226,232,240,.72)" }} iconType="line" />
+              <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4, color: "var(--chart-axis)" }} iconType="line" />
 
               {/* Atmospheric area layers */}
               <Area yAxisId="kw" type="monotone" dataKey="kW" name="kW" stroke="transparent" fill="url(#area-kw)" strokeWidth={0} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} connectNulls={false} isAnimationActive={false} />
@@ -119,12 +119,12 @@ export function CentralBehaviorChart({ data }: { data: DashboardData }) {
               <Line yAxisId="kw" type="monotone" dataKey="deltaT" stroke="var(--color-esg)" strokeWidth={5} strokeOpacity={0.16} dot={false} legendType="none" tooltipType="none" connectNulls={false} filter="url(#deep-glow)" />
 
               {/* Crisp top strokes */}
-              <Line yAxisId="kw" type="monotone" dataKey="kW" name="kW" stroke="var(--color-water)" strokeWidth={2.05} dot={false} activeDot={{ r: 4.5, stroke: "rgba(7,12,22,.9)", strokeWidth: 2 }} legendType="none" tooltipType="none" connectNulls={false} filter="url(#line-bloom)" />
-              <Line yAxisId="kw" type="monotone" dataKey="trh" name="Carga térmica (TR)" stroke="var(--color-efficiency)" strokeWidth={2.05} dot={false} activeDot={{ r: 4.5, stroke: "rgba(7,12,22,.9)", strokeWidth: 2 }} legendType="none" tooltipType="none" connectNulls={false} filter="url(#line-bloom)" />
-              <Line yAxisId="kw" type="monotone" dataKey="kwPerTr" name="kW/TR" stroke="var(--color-carbon)" strokeWidth={1.8} dot={false} activeDot={{ r: 4.5, stroke: "rgba(7,12,22,.9)", strokeWidth: 2 }} legendType="none" tooltipType="none" connectNulls={false} filter="url(#line-bloom)" />
-              <Line yAxisId="kw" type="monotone" dataKey="deltaT" name="Delta-T (°C)" stroke="var(--color-esg)" strokeWidth={1.7} dot={false} activeDot={{ r: 4.5, stroke: "rgba(7,12,22,.9)", strokeWidth: 2 }} legendType="none" tooltipType="none" connectNulls={false} filter="url(#line-bloom)" />
-              <Line yAxisId="temp" type="monotone" dataKey="extTemp" name="Temp. externa (°C)" stroke="rgba(226,232,240,.82)" strokeWidth={1.6} strokeDasharray="4 5" dot={false} activeDot={{ r: 4, strokeWidth: 1.5 }} connectNulls={false} />
-              <Line yAxisId="cum" type="monotone" dataKey="cumulative" name="Consumo acumulado (kWh)" stroke="rgba(226,232,240,.58)" strokeWidth={1.75} strokeDasharray="2 7" dot={false} activeDot={{ r: 3.5, strokeWidth: 1.5 }} connectNulls={false} />
+              <Line yAxisId="kw" type="monotone" dataKey="kW" name="kW" stroke="var(--color-water)" strokeWidth={2.05} dot={false} activeDot={{ r: 4.5, stroke: "var(--chart-active-dot-stroke)", strokeWidth: 2 }} legendType="none" tooltipType="none" connectNulls={false} filter="url(#line-bloom)" />
+              <Line yAxisId="kw" type="monotone" dataKey="trh" name="Carga térmica (TR)" stroke="var(--color-efficiency)" strokeWidth={2.05} dot={false} activeDot={{ r: 4.5, stroke: "var(--chart-active-dot-stroke)", strokeWidth: 2 }} legendType="none" tooltipType="none" connectNulls={false} filter="url(#line-bloom)" />
+              <Line yAxisId="kw" type="monotone" dataKey="kwPerTr" name="kW/TR" stroke="var(--color-carbon)" strokeWidth={1.8} dot={false} activeDot={{ r: 4.5, stroke: "var(--chart-active-dot-stroke)", strokeWidth: 2 }} legendType="none" tooltipType="none" connectNulls={false} filter="url(#line-bloom)" />
+              <Line yAxisId="kw" type="monotone" dataKey="deltaT" name="Delta-T (°C)" stroke="var(--color-esg)" strokeWidth={1.7} dot={false} activeDot={{ r: 4.5, stroke: "var(--chart-active-dot-stroke)", strokeWidth: 2 }} legendType="none" tooltipType="none" connectNulls={false} filter="url(#line-bloom)" />
+              <Line yAxisId="temp" type="monotone" dataKey="extTemp" name="Temp. externa (°C)" stroke="var(--chart-soft-line)" strokeWidth={1.6} strokeDasharray="4 5" dot={false} activeDot={{ r: 4, strokeWidth: 1.5 }} connectNulls={false} />
+              <Line yAxisId="cum" type="monotone" dataKey="cumulative" name="Consumo acumulado (kWh)" stroke="var(--chart-soft-line)" strokeWidth={1.75} strokeDasharray="2 7" dot={false} activeDot={{ r: 3.5, strokeWidth: 1.5 }} connectNulls={false} />
             </ComposedChart>
           </ResponsiveContainer>
         ) : (

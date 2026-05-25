@@ -180,13 +180,13 @@
     position: relative;
     overflow: hidden;
     background:
-      radial-gradient(circle at 18% 0%, rgba(59, 130, 246, 0.10), transparent 34%),
-      radial-gradient(circle at 100% 0%, rgba(16, 185, 129, 0.08), transparent 28%),
-      linear-gradient(180deg, rgba(17, 24, 39, 0.82), rgba(7, 12, 22, 0.92));
-    border: 1px solid rgba(148, 163, 184, 0.12);
+      radial-gradient(circle at 18% 0%, color-mix(in oklab, var(--color-water) 13%, transparent), transparent 34%),
+      radial-gradient(circle at 100% 0%, color-mix(in oklab, var(--color-efficiency) 10%, transparent), transparent 28%),
+      linear-gradient(180deg, color-mix(in oklab, var(--color-card) 96%, transparent), color-mix(in oklab, var(--color-surface) 98%, transparent));
+    border: 1px solid color-mix(in oklab, var(--color-border) 92%, transparent);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.035),
-      0 18px 55px rgba(0, 0, 0, 0.28);
+      inset 0 1px 0 color-mix(in oklab, white 58%, transparent),
+      0 18px 44px color-mix(in oklab, var(--color-foreground) 8%, transparent);
     backdrop-filter: blur(16px);
   }
 
@@ -195,10 +195,31 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
+    background: linear-gradient(135deg, color-mix(in oklab, white 34%, transparent), transparent 22%, transparent 75%, color-mix(in oklab, var(--color-water) 8%, transparent));
+  }
+
+  .dark .control-card {
+    background:
+      radial-gradient(circle at 18% 0%, rgba(59, 130, 246, 0.10), transparent 34%),
+      radial-gradient(circle at 100% 0%, rgba(16, 185, 129, 0.08), transparent 28%),
+      linear-gradient(180deg, rgba(17, 24, 39, 0.82), rgba(7, 12, 22, 0.92));
+    border-color: rgba(148, 163, 184, 0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.035),
+      0 18px 55px rgba(0, 0, 0, 0.28);
+  }
+
+  .dark .control-card::before {
     background: linear-gradient(135deg, rgba(255,255,255,.055), transparent 22%, transparent 75%, rgba(255,255,255,.025));
   }
 
   .chart-panel {
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--color-card) 98%, transparent), color-mix(in oklab, var(--color-surface) 98%, transparent)),
+      radial-gradient(circle at 50% 0%, color-mix(in oklab, var(--color-esg) 12%, transparent), transparent 45%);
+  }
+
+  .dark .chart-panel {
     background:
       linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(5, 10, 18, 0.95)),
       radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.10), transparent 45%);
@@ -216,6 +237,35 @@
   .chart-stage {
     position: relative;
     overflow: hidden;
+    --chart-grid: color-mix(in oklab, var(--color-muted-foreground) 16%, transparent);
+    --chart-axis: color-mix(in oklab, var(--color-muted-foreground) 72%, transparent);
+    --chart-axis-line: color-mix(in oklab, var(--color-muted-foreground) 20%, transparent);
+    --chart-soft-line: color-mix(in oklab, var(--color-muted-foreground) 58%, transparent);
+    --chart-reference: color-mix(in oklab, var(--color-foreground) 36%, transparent);
+    --chart-active-dot-stroke: var(--color-card);
+    --chart-tooltip-bg: color-mix(in oklab, var(--color-card) 96%, transparent);
+    --chart-tooltip-bg-2: color-mix(in oklab, var(--color-surface) 98%, transparent);
+    --chart-tooltip-border: color-mix(in oklab, var(--color-esg) 24%, var(--color-border));
+    --chart-tooltip-text: var(--color-foreground);
+    --chart-tooltip-label: var(--color-foreground);
+    background:
+      radial-gradient(circle at 46% 35%, color-mix(in oklab, var(--color-water) 12%, transparent), transparent 38%),
+      radial-gradient(circle at 56% 62%, color-mix(in oklab, var(--color-efficiency) 9%, transparent), transparent 44%),
+      linear-gradient(180deg, color-mix(in oklab, var(--color-surface) 66%, transparent), color-mix(in oklab, var(--color-muted) 72%, transparent));
+  }
+
+  .dark .chart-stage {
+    --chart-grid: rgba(148,163,184,.085);
+    --chart-axis: rgba(203,213,225,.68);
+    --chart-axis-line: rgba(148,163,184,.18);
+    --chart-soft-line: rgba(226,232,240,.72);
+    --chart-reference: rgba(255,255,255,.42);
+    --chart-active-dot-stroke: rgba(7,12,22,.9);
+    --chart-tooltip-bg: rgba(8,13,24,.98);
+    --chart-tooltip-bg-2: rgba(5,10,18,.98);
+    --chart-tooltip-border: rgba(94,234,212,.16);
+    --chart-tooltip-text: #e5e7eb;
+    --chart-tooltip-label: #ffffff;
     background:
       radial-gradient(circle at 46% 35%, rgba(14, 165, 233, 0.12), transparent 38%),
       radial-gradient(circle at 56% 62%, rgba(16, 185, 129, 0.09), transparent 44%),
@@ -228,10 +278,19 @@
     inset: 8px 8px 26px 34px;
     pointer-events: none;
     background:
+      radial-gradient(ellipse at 38% 50%, color-mix(in oklab, var(--color-water) 15%, transparent), transparent 58%),
+      radial-gradient(ellipse at 56% 58%, color-mix(in oklab, var(--color-efficiency) 13%, transparent), transparent 55%),
+      radial-gradient(ellipse at 44% 80%, color-mix(in oklab, var(--color-carbon) 10%, transparent), transparent 52%);
+    filter: blur(18px);
+    opacity: .72;
+    mix-blend-mode: multiply;
+  }
+
+  .dark .chart-stage::before {
+    background:
       radial-gradient(ellipse at 38% 50%, rgba(59, 130, 246, 0.14), transparent 58%),
       radial-gradient(ellipse at 56% 58%, rgba(34, 197, 94, 0.11), transparent 55%),
       radial-gradient(ellipse at 44% 80%, rgba(168, 85, 247, 0.08), transparent 52%);
-    filter: blur(18px);
     opacity: .86;
     mix-blend-mode: screen;
   }
@@ -241,6 +300,13 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
+    background:
+      linear-gradient(90deg, color-mix(in oklab, white 42%, transparent), transparent 18%, transparent 82%, color-mix(in oklab, var(--color-water) 8%, transparent)),
+      linear-gradient(180deg, color-mix(in oklab, white 44%, transparent), transparent 30%, color-mix(in oklab, var(--color-foreground) 5%, transparent));
+    box-shadow: inset 0 0 70px color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  }
+
+  .dark .chart-stage::after {
     background:
       linear-gradient(90deg, rgba(255,255,255,.035), transparent 18%, transparent 82%, rgba(255,255,255,.03)),
       linear-gradient(180deg, rgba(255,255,255,.035), transparent 30%, rgba(0,0,0,.18));
@@ -255,10 +321,10 @@
 
   .chart-stage .recharts-cartesian-grid-horizontal line,
   .chart-stage .recharts-cartesian-grid-vertical line {
-    filter: drop-shadow(0 0 2px rgba(148, 163, 184, .08));
+    filter: drop-shadow(0 0 2px color-mix(in oklab, var(--color-muted-foreground) 12%, transparent));
   }
 
   .chart-stage .recharts-legend-item-text {
-    color: rgba(226, 232, 240, .74) !important;
+    color: var(--chart-axis) !important;
   }
 }

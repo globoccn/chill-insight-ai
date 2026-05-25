@@ -1,8 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
-export const N8N_WEBHOOK_URL =
-  import.meta.env.VITE_N8N_WEBHOOK_URL ||
-  "https://ancar-n8n.gpfgqx.easypanel.host/webhook/dados-globo-vm22";
+export const N8N_API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_N8N_API_URL ||
+  "https://ancar-n8n.gpfgqx.easypanel.host/webhook";
+
+export const N8N_UPLOAD_WEBHOOK_URL = `${N8N_API_BASE_URL.replace(/\/+$/, "")}/dados-globo-vm22`;
 
 export const DASHBOARD_DATA_URL =
   import.meta.env.VITE_DASHBOARD_DATA_URL || "/api/dashboard";

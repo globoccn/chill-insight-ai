@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageTitle } from "@/components/layout/PageTitle";
-import { DASHBOARD_DATA_URL, N8N_WEBHOOK_URL } from "@/lib/dashboard-data";
+import { DASHBOARD_DATA_URL, N8N_API_BASE_URL, N8N_UPLOAD_WEBHOOK_URL } from "@/lib/dashboard-data";
 import {
   DashboardSettings,
   DEFAULT_DASHBOARD_SETTINGS,
@@ -124,9 +124,7 @@ function SettingsPage() {
     setSavedMessage(null);
     const result = await saveSettings.mutateAsync(settings);
     setSavedMessage(
-      result.source === "redis"
-        ? "Settings salvas no Redis em cag:settings. O próximo processamento do n8n já pode usar estes valores."
-        : "Settings salvas em memória local. Configure REDIS_REST_URL e REDIS_REST_TOKEN para persistir no Redis.",
+      "Settings enviadas para o workflow n8n /dashboard-settings. O n8n deve gravar em cag:settings no Redis.",
     );
   };
 
@@ -169,8 +167,9 @@ function SettingsPage() {
       )}
 
       <Card title="Integração n8n">
-        <ReadOnlyField label="Endpoint usado pelo dashboard" value={DASHBOARD_DATA_URL} />
-        <ReadOnlyField label="Webhook n8n" value={N8N_WEBHOOK_URL} />
+        <ReadOnlyField label="Endpoint interno usado pelo dashboard" value={DASHBOARD_DATA_URL} />
+        <ReadOnlyField label="Base n8n configurada" value={N8N_API_BASE_URL} />
+        <ReadOnlyField label="Webhook de upload CSV" value={N8N_UPLOAD_WEBHOOK_URL} />
       </Card>
 
       <Card title="Carbono & Energia">
@@ -282,8 +281,8 @@ function SettingsPage() {
         <Field label="UR3" value={settings.chiller_names.ur3} onChange={(value) => setChillerName("ur3", value)} />
       </Card>
 
-      <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
-        Para persistir de verdade no Redis, configure no ambiente do dashboard: <code>REDIS_REST_URL</code> e <code>REDIS_REST_TOKEN</code>. Sem isso, o app salva apenas em memória local para teste.
+      <div className="rounded-2xl border border-efficiency/30 bg-efficiency/10 p-4 text-sm text-efficiency">
+        As Settings são enviadas para o n8n pelo endpoint <code>/api/settings</code>. O workflow n8n <code>/dashboard-settings</code> é responsável por gravar/ler a chave <code>cag:settings</code> no Redis.
       </div>
     </AppShell>
   );

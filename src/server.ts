@@ -18,159 +18,92 @@ async function getServerEntry(): Promise<ServerEntry> {
   return serverEntryPromise;
 }
 
-
-type DashboardSettings = Record<string, unknown>;
-
-const SETTINGS_KEY = "cag:settings";
-
-const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {
-  meta_kwtr: 0.88,
-  area_climatizada_m2: null,
-  fator_carbono_kgco2_kwh: 0.0385,
-  intervalo_horas: 0.25,
-  deltaT_evap_min: 4,
-  deltaT_evap_ideal: 5.5,
-  limite_kw_pico: null,
-  tarifa_kwh: null,
-  baseline_kwh_dia: null,
-  meta_kwh_mes: null,
-  meta_co2_mes_ton: null,
-  horario_operacional_inicio: "08:00",
-  horario_operacional_fim: "18:00",
-  unidade_vazao: "m³/h",
-  capacidade_nominal_total_tr: null,
-  chiller_names: {
-    ur1: "UR1",
-    ur2: "UR2",
-    ur3: "UR3",
-  },
-};
-
-let memorySettings: DashboardSettings | undefined;
+const DEFAULT_N8N_BASE_URL = "https://ancar-n8n.gpfgqx.easypanel.host/webhook";
 
 function getEnvValue(env: unknown, key: string): string | undefined {
   const fromEnv = env && typeof env === "object" ? (env as Record<string, unknown>)[key] : undefined;
-  if (typeof fromEnv === "string" && fromEnv.trim()) return fromEnv;
+  if (typeof fromEnv === "string" && fromEnv.trim()) return fromEnv.trim();
 
   const proc = globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } };
   const fromProcess = proc.process?.env?.[key];
-  return fromProcess && fromProcess.trim() ? fromProcess : undefined;
+  return fromProcess && fromProcess.trim() ? fromProcess.trim() : undefined;
 }
 
-async function redisRestCommand(env: unknown, command: unknown[]): Promise<unknown> {
-  const restUrl = getEnvValue(env, "REDIS_REST_URL") || getEnvValue(env, "UPSTASH_REDIS_REST_URL");
-  const restToken = getEnvValue(env, "REDIS_REST_TOKEN") || getEnvValue(env, "UPSTASH_REDIS_REST_TOKEN");
+function getN8nBaseUrl(env: unknown): string {
+  return (
+    getEnvValue(env, "VITE_API_URL") ||
+    getEnvValue(env, "N8N_API_URL") ||
+    getEnvValue(env, "N8N_WEBHOOK_BASE_URL") ||
+    DEFAULT_N8N_BASE_URL
+  ).replace(/\/+$/, "");
+}
 
-  if (!restUrl || !restToken) {
-    return undefined;
-  }
+function jsonHeaders(extra?: HeadersInit) {
+  const headers = new Headers(extra);
+  headers.set("access-control-allow-origin", "*");
+  headers.set("access-control-allow-methods", "GET,POST,OPTIONS");
+  headers.set("access-control-allow-headers", "content-type,authorization");
+  return headers;
+}
 
-  const response = await fetch(restUrl, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${restToken}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(command),
+async function proxyToN8n(request: Request, env: unknown, path: string, method?: string): Promise<Response> {
+  const incomingUrl = new URL(request.url);
+  const target = new URL(`${getN8nBaseUrl(env)}/${path.replace(/^\/+/, "")}`);
+  target.search = incomingUrl.search;
+
+  const headers = new Headers(request.headers);
+  headers.delete("host");
+
+  const finalMethod = method ?? request.method;
+  const hasBody = !["GET", "HEAD"].includes(finalMethod.toUpperCase());
+
+  const response = await fetch(target.toString(), {
+    method: finalMethod,
+    headers,
+    body: hasBody ? request.body : undefined,
   });
 
-  if (!response.ok) {
-    throw new Error(`Redis REST error ${response.status}: ${await response.text()}`);
-  }
-
-  const payload = (await response.json()) as { result?: unknown; error?: string };
-  if (payload.error) throw new Error(payload.error);
-  return payload.result;
+  const responseHeaders = jsonHeaders(response.headers);
+  return new Response(response.body, { status: response.status, headers: responseHeaders });
 }
 
-function normalizeSettings(value: unknown): DashboardSettings {
-  const parsed = typeof value === "string" ? JSON.parse(value) : value;
-  const obj = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as DashboardSettings : {};
-  const chillerNames = obj.chiller_names && typeof obj.chiller_names === "object" ? obj.chiller_names as Record<string, unknown> : {};
-
-  return {
-    ...DEFAULT_DASHBOARD_SETTINGS,
-    ...obj,
-    chiller_names: {
-      ...(DEFAULT_DASHBOARD_SETTINGS.chiller_names as Record<string, unknown>),
-      ...chillerNames,
-    },
-  };
-}
-
-async function readSettings(env: unknown): Promise<{ settings: DashboardSettings; source: string }> {
-  const redisValue = await redisRestCommand(env, ["GET", SETTINGS_KEY]);
-  if (redisValue) {
-    return { settings: normalizeSettings(redisValue), source: "redis" };
+async function handleDashboardRequest(request: Request, env: unknown): Promise<Response> {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: jsonHeaders() });
+  if (request.method !== "GET") {
+    return new Response(JSON.stringify({ error: true, message: "Method not allowed" }), {
+      status: 405,
+      headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }),
+    });
   }
 
-  if (memorySettings) {
-    return { settings: normalizeSettings(memorySettings), source: "memory" };
-  }
-
-  return { settings: normalizeSettings(DEFAULT_DASHBOARD_SETTINGS), source: "default" };
-}
-
-async function writeSettings(env: unknown, settings: DashboardSettings): Promise<{ settings: DashboardSettings; source: string }> {
-  const normalized = normalizeSettings(settings);
-  const redisResult = await redisRestCommand(env, ["SET", SETTINGS_KEY, JSON.stringify(normalized)]);
-
-  if (redisResult !== undefined) {
-    return { settings: normalized, source: "redis" };
-  }
-
-  memorySettings = normalized;
-  return { settings: normalized, source: "memory" };
+  // Dados consolidados já gravados pelo n8n no Redis: cag:dashboard:latest.
+  return proxyToN8n(request, env, "dashboard-data", "GET");
 }
 
 async function handleSettingsRequest(request: Request, env: unknown): Promise<Response> {
-  const headers = new Headers({
-    "content-type": "application/json; charset=utf-8",
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization",
-  });
-
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers });
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: jsonHeaders() });
+  if (!["GET", "POST"].includes(request.method)) {
+    return new Response(JSON.stringify({ error: true, message: "Method not allowed" }), {
+      status: 405,
+      headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }),
+    });
   }
 
-  if (request.method === "GET") {
-    const result = await readSettings(env);
-    return new Response(JSON.stringify(result), { status: 200, headers });
-  }
-
-  if (request.method === "POST") {
-    const body = await request.json();
-    const result = await writeSettings(env, body as DashboardSettings);
-    return new Response(JSON.stringify({ success: true, ...result }), { status: 200, headers });
-  }
-
-  return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers });
+  // Settings são salvas/lidas pelo n8n em cag:settings.
+  return proxyToN8n(request, env, "dashboard-settings", request.method);
 }
 
+async function handleUploadRequest(request: Request, env: unknown): Promise<Response> {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: jsonHeaders() });
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify({ error: true, message: "Method not allowed" }), {
+      status: 405,
+      headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }),
+    });
+  }
 
-const N8N_DASHBOARD_WEBHOOK_URL = "https://ancar-n8n.gpfgqx.easypanel.host/webhook/dados-globo-vm22";
-
-async function proxyDashboardRequest(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const isUpload = url.pathname === "/api/dashboard/upload";
-  const target = new URL(N8N_DASHBOARD_WEBHOOK_URL);
-  target.search = url.search;
-
-  const headers = isUpload ? new Headers(request.headers) : new Headers({ accept: "application/json" });
-  headers.delete("host");
-
-  const init: RequestInit = {
-    method: isUpload ? "POST" : "GET",
-    headers,
-    body: isUpload ? request.body : undefined,
-  };
-
-  const response = await fetch(target.toString(), init);
-  const headers = new Headers(response.headers);
-  headers.set("access-control-allow-origin", "*");
-  return new Response(response.body, { status: response.status, headers });
+  // Workflow principal que recebe CSV e alimenta o Redis.
+  return proxyToN8n(request, env, "dados-globo-vm22", "POST");
 }
 
 function brandedErrorResponse(): Response {
@@ -205,8 +138,6 @@ function isCatastrophicSsrErrorBody(body: string, responseStatus: number): boole
   );
 }
 
-// h3 swallows in-handler throws into a normal 500 Response with body
-// {"unhandled":true,"message":"HTTPError"} — try/catch alone never fires for those.
 async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
   if (response.status < 500) return response;
   const contentType = response.headers.get("content-type") ?? "";
@@ -224,12 +155,17 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/settings") {
-      return handleSettingsRequest(request, env);
+
+    if (url.pathname === "/api/dashboard") {
+      return handleDashboardRequest(request, env);
     }
 
-    if (url.pathname === "/api/dashboard" || url.pathname === "/api/dashboard/upload") {
-      return proxyDashboardRequest(request);
+    if (url.pathname === "/api/dashboard/upload") {
+      return handleUploadRequest(request, env);
+    }
+
+    if (url.pathname === "/api/settings") {
+      return handleSettingsRequest(request, env);
     }
 
     try {

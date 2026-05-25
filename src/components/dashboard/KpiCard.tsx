@@ -53,7 +53,8 @@ function buildVisualSparkline(points: DashboardKpi["sparkline"]) {
 export function KpiCard({ kpi, icon }: { kpi: DashboardKpi; icon?: React.ReactNode }) {
   const c = colorVar[kpi.color];
   const id = `kpi-${kpi.key}`;
-  const sparklineData = buildVisualSparkline(kpi.sparkline);
+  const showSparkline = kpi.key !== "hours";
+  const sparklineData = showSparkline ? buildVisualSparkline(kpi.sparkline) : [];
 
   return (
     <div className="control-card group relative min-h-[154px] overflow-hidden rounded-xl p-3.5 transition duration-300 hover:-translate-y-0.5 hover:border-foreground/15">
@@ -79,7 +80,7 @@ export function KpiCard({ kpi, icon }: { kpi: DashboardKpi; icon?: React.ReactNo
       {kpi.extra ? <div className="relative mt-1 text-[10.5px] text-muted-foreground line-clamp-1">{kpi.extra}</div> : null}
 
       <div className="relative mt-2 h-9 -mx-1">
-        {sparklineData.length > 1 ? (
+        {showSparkline && sparklineData.length > 1 ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={sparklineData} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
               <defs>
@@ -109,9 +110,9 @@ export function KpiCard({ kpi, icon }: { kpi: DashboardKpi; icon?: React.ReactNo
               />
             </AreaChart>
           </ResponsiveContainer>
-        ) : (
+        ) : showSparkline ? (
           <div className="h-full rounded-lg bg-[linear-gradient(90deg,transparent,var(--color-border),transparent)] opacity-60" />
-        )}
+        ) : null}
       </div>
     </div>
   );

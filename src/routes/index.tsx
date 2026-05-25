@@ -36,7 +36,7 @@ function Overview() {
   return (
     <AppShell>
       {isLoading && <div className="glass-card rounded-2xl p-4 text-sm text-muted-foreground">Carregando dados do n8n...</div>}
-      {error && <div className="glass-card rounded-2xl p-4 text-sm text-warning">Não foi possível carregar {DASHBOARD_DATA_URL}. Verifique se o webhook retorna JSON no método GET.</div>}
+      {error && <div className="glass-card rounded-2xl p-4 text-sm text-warning">Não foi possível carregar os dados reais do n8n em {DASHBOARD_DATA_URL}. Verifique se o workflow GET está ativo, se o Redis tem cag:dashboard:latest e se o webhook permite CORS.</div>}
       {data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3">

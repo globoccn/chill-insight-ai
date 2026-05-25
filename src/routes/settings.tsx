@@ -282,7 +282,7 @@ function SettingsPage() {
       </Card>
 
       <div className="rounded-2xl border border-efficiency/30 bg-efficiency/10 p-4 text-sm text-efficiency">
-        As Settings são enviadas para o n8n pelo endpoint <code>/api/settings</code>. O workflow n8n <code>/dashboard-settings</code> é responsável por gravar/ler a chave <code>cag:settings</code> no Redis.
+        As Settings são enviadas diretamente para o webhook n8n <code>/dashboard-settings</code>. Esse workflow grava/lê a chave <code>cag:settings</code> no Redis.
       </div>
     </AppShell>
   );

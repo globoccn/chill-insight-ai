@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { N8N_SETTINGS_URL } from "@/lib/dashboard-data";
 
 export interface DashboardSettings {
   meta_kwtr: number;
@@ -58,21 +59,23 @@ export function normalizeSettings(value: Partial<DashboardSettings> | null | und
 }
 
 export async function getSettings(): Promise<DashboardSettings> {
-  const response = await fetch("/api/settings", {
+  const response = await fetch(N8N_SETTINGS_URL, {
     method: "GET",
-    headers: { accept: "application/json" },
+    headers: { accept: "application/json,text/plain,*/*" },
+    cache: "no-store",
   });
 
   if (!response.ok) {
     throw new Error(`Falha ao carregar settings: ${response.status}`);
   }
 
-  const payload = await response.json();
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : null;
   return normalizeSettings(payload?.settings ?? payload);
 }
 
 export async function saveSettings(settings: DashboardSettings): Promise<{ success: boolean; source?: string }> {
-  const response = await fetch("/api/settings", {
+  const response = await fetch(N8N_SETTINGS_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(settings),
@@ -83,7 +86,8 @@ export async function saveSettings(settings: DashboardSettings): Promise<{ succe
     throw new Error(message || `Falha ao salvar settings: ${response.status}`);
   }
 
-  return response.json();
+  const text = await response.text();
+  return text ? JSON.parse(text) : { success: true };
 }
 
 export function useSettings() {

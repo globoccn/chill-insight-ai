@@ -5,10 +5,16 @@ export const N8N_API_BASE_URL =
   import.meta.env.VITE_N8N_API_URL ||
   "https://ancar-n8n.gpfgqx.easypanel.host/webhook";
 
-export const N8N_UPLOAD_WEBHOOK_URL = `${N8N_API_BASE_URL.replace(/\/+$/, "")}/dados-globo-vm22`;
+const n8nBaseUrl = N8N_API_BASE_URL.replace(/\/+$/, "");
 
+export const N8N_DASHBOARD_DATA_URL = `${n8nBaseUrl}/dashboard-data`;
+export const N8N_SETTINGS_URL = `${n8nBaseUrl}/dashboard-settings`;
+export const N8N_UPLOAD_WEBHOOK_URL = `${n8nBaseUrl}/dados-globo-vm22`;
+
+// Em deploy estático o /api/dashboard pode não existir. Por isso o padrão é
+// consumir o webhook GET /dashboard-data diretamente no n8n.
 export const DASHBOARD_DATA_URL =
-  import.meta.env.VITE_DASHBOARD_DATA_URL || "/api/dashboard";
+  import.meta.env.VITE_DASHBOARD_DATA_URL || N8N_DASHBOARD_DATA_URL;
 
 export type ChillerStatus = "Online" | "Standby" | "Alarm" | string;
 
@@ -192,17 +198,38 @@ function normalize(payload: unknown): DashboardData {
   };
 }
 
+async function readResponsePayload(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text.trim()) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   const response = await fetch(DASHBOARD_DATA_URL, {
     method: "GET",
-    headers: { accept: "application/json" },
+    headers: { accept: "application/json,text/plain,*/*" },
+    cache: "no-store",
   });
+
+  const payload = await readResponsePayload(response);
 
   if (!response.ok) {
     throw new Error(`Falha ao buscar dashboard: ${response.status}`);
   }
 
-  return normalize(await response.json());
+  const data = normalize(payload);
+
+  // Evita exibir tela vazia quando o n8n retornar erro estruturado.
+  if ((payload as { error?: unknown } | null)?.error) {
+    throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
+  }
+
+  return data;
 }
 
 export async function postDashboardCsv(file: File): Promise<unknown> {
@@ -210,7 +237,7 @@ export async function postDashboardCsv(file: File): Promise<unknown> {
   formData.append("file", file);
   formData.append("source", "dashboard-upload");
 
-  const response = await fetch("/api/dashboard/upload", {
+  const response = await fetch(N8N_UPLOAD_WEBHOOK_URL, {
     method: "POST",
     body: formData,
   });

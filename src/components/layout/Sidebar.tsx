@@ -75,7 +75,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-auto p-4">
+      <div className="mt-auto px-4 pb-8 -translate-y-6">
         <div className="rounded-2xl border border-sidebar-border bg-card/60 p-5 text-center">
           <div className="text-xs font-medium text-muted-foreground">ESG Performance Score</div>
           <div className="relative mx-auto mt-3 grid h-28 w-28 place-items-center">

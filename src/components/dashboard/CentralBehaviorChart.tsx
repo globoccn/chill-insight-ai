@@ -73,9 +73,19 @@ export function CentralBehaviorChart({ data }: { data: DashboardData }) {
               <YAxis yAxisId="cum" orientation="right" hide domain={["dataMin", "dataMax"]} />
               {meta > 0 ? <ReferenceLine yAxisId="kw" y={meta} stroke="rgba(255,255,255,.42)" strokeDasharray="6 6" label={{ value: `Meta ${formatNumber(meta, 2)}`, fill: "var(--color-muted-foreground)", fontSize: 10 }} /> : null}
               <Tooltip
-                cursor={{ stroke: "rgba(255,255,255,.13)", strokeWidth: 1 }}
-                contentStyle={{ background: "rgba(8,13,24,.96)", border: "1px solid rgba(148,163,184,.18)", borderRadius: 14, fontSize: 12, boxShadow: "0 20px 60px rgba(0,0,0,.45)" }}
-                labelStyle={{ color: "#e5e7eb", fontWeight: 600 }}
+                cursor={{ stroke: "rgba(255,255,255,.10)", strokeWidth: 1, strokeDasharray: "4 4" }}
+                contentStyle={{
+                  background: "linear-gradient(180deg, rgba(8,13,24,.98) 0%, rgba(5,10,18,.98) 100%)",
+                  border: "1px solid rgba(94,234,212,.16)",
+                  borderRadius: 18,
+                  fontSize: 12,
+                  boxShadow: "0 24px 80px rgba(0,0,0,.55)",
+                  backdropFilter: "blur(10px)",
+                  padding: "12px 14px",
+                }}
+                itemStyle={{ color: "#e5e7eb", paddingTop: 2, paddingBottom: 2 }}
+                labelStyle={{ color: "#ffffff", fontWeight: 700, marginBottom: 8, letterSpacing: ".02em" }}
+                separator="•"
               />
               <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconType="line" />
               <Area yAxisId="kw" type="monotone" dataKey="kW" name="kW" stroke="var(--color-water)" fill="url(#area-kw)" strokeWidth={2} dot={false} connectNulls={false} filter="url(#soft-glow)" />

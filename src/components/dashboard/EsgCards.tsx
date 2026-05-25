@@ -1,5 +1,5 @@
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
-import { consumptionByPeriod, esgPerformance, healthScores } from "@/lib/mock-data";
+import { buildConsumptionByPeriod, formatNumber, type DashboardData } from "@/lib/dashboard-data";
 
 const COLORS = {
   water: "var(--color-water)",
@@ -9,7 +9,8 @@ const COLORS = {
 } as const;
 
 function MiniDonut({ pct, color }: { pct: number; color: string }) {
-  const data = [{ v: pct }, { v: 100 - pct }];
+  const safePct = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  const data = [{ v: safePct }, { v: 100 - safePct }];
   return (
     <div className="relative h-16 w-16">
       <ResponsiveContainer>
@@ -20,17 +21,26 @@ function MiniDonut({ pct, color }: { pct: number; color: string }) {
           </Pie>
         </PieChart>
       </ResponsiveContainer>
-      <div className="absolute inset-0 grid place-items-center text-[10px] font-medium">{pct}%</div>
+      <div className="absolute inset-0 grid place-items-center text-[10px] font-medium">{safePct}%</div>
     </div>
   );
 }
 
-export function PerformanceEsgCard() {
+function scoreFromDeviation(deviation?: number | null) {
+  if (deviation === null || deviation === undefined) return 0;
+  return Math.max(0, Math.min(100, Math.round(100 - Math.max(0, deviation) * 3)));
+}
+
+export function PerformanceEsgCard({ data }: { data: DashboardData }) {
+  const o = data.overview;
+  const score = scoreFromDeviation(o.desvio_meta_kwtr);
+  const carbonScore = o.carbono_ton ? 85 : 0;
+
   const items = [
-    { label: "Carbono (D-1)",         value: "18,7", unit: "tCO₂e",   target: "Meta: ≤ 20,0 tCO₂e", pct: 93,  color: COLORS.carbon,     hint: "" },
-    { label: "Intensidade energética",value: "0,62", unit: "kWh/TRh", target: "Meta: ≤ 0,68",       pct: 91,  color: COLORS.efficiency, hint: "" },
-    { label: "Economia vs baseline",  value: "-9,8", unit: "%",       target: "Meta: ≤ -8,0%",      pct: 95,  color: COLORS.esg,        hint: "" },
-    { label: "Progresso mensal (Maio)",value:"-8,6", unit: "%",       target: "Meta mensal: ≤ -8,0%", pct: 86, color: COLORS.efficiency, hint: "Meta atingida 86%" },
+    { label: "Carbono", value: formatNumber(o.carbono_ton, 3), unit: "tCO₂e", target: "Fator nacional provisório", pct: carbonScore, color: COLORS.carbon },
+    { label: "Intensidade energética", value: formatNumber(o.kwtr_medio, 3), unit: "kW/TR", target: `Meta: ≤ ${formatNumber(o.kwtr_meta, 2)}`, pct: score, color: COLORS.efficiency },
+    { label: "Desvio da meta", value: formatNumber(o.desvio_meta_kwtr, 2), unit: "%", target: "Meta provisória configurável", pct: score, color: COLORS.esg },
+    { label: "COP médio", value: formatNumber(o.cop_medio, 2), unit: "", target: "Calculado por 3,516/kWTR", pct: Math.max(0, Math.min(100, Number(o.cop_medio ?? 0) * 20)), color: COLORS.efficiency },
   ];
 
   return (
@@ -47,7 +57,6 @@ export function PerformanceEsgCard() {
             <div className="mt-1 text-[11px] text-muted-foreground">{it.target}</div>
             <div className="mt-3 flex items-center justify-between">
               <MiniDonut pct={it.pct} color={it.color} />
-              <div className="text-right text-[11px] text-efficiency font-medium">{it.hint || ""}</div>
             </div>
           </div>
         ))}
@@ -56,24 +65,26 @@ export function PerformanceEsgCard() {
   );
 }
 
-export function ConsumptionByPeriodCard() {
-  const data = consumptionByPeriod.map((d) => ({ name: d.period, value: d.pct, color: COLORS[d.color] }));
-  const total = "42.350";
+export function ConsumptionByPeriodCard({ data }: { data: DashboardData }) {
+  const consumptionByPeriod = buildConsumptionByPeriod(data);
+  const chartData = consumptionByPeriod.map((d) => ({ name: d.period, value: d.pct, color: COLORS[d.color] }));
+  const total = data.overview.kwh_total ?? 0;
+
   return (
     <div className="glass-card rounded-2xl p-5">
-      <h3 className="text-[15px] font-semibold tracking-tight">Consumo por período (D-1)</h3>
+      <h3 className="text-[15px] font-semibold tracking-tight">Consumo por período</h3>
       <div className="mt-4 flex items-center gap-5">
         <div className="relative h-44 w-44 shrink-0">
           <ResponsiveContainer>
             <PieChart>
-              <Pie data={data} dataKey="value" innerRadius={56} outerRadius={84} paddingAngle={2} stroke="none">
-                {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+              <Pie data={chartData} dataKey="value" innerRadius={56} outerRadius={84} paddingAngle={2} stroke="none">
+                {chartData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 grid place-items-center">
             <div className="text-center">
-              <div className="text-xl font-semibold tracking-tight">{total}</div>
+              <div className="text-xl font-semibold tracking-tight">{formatNumber(total)}</div>
               <div className="text-[10px] text-muted-foreground">kWh</div>
             </div>
           </div>
@@ -84,7 +95,7 @@ export function ConsumptionByPeriodCard() {
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLORS[d.color] }} />
               <span className="flex-1 text-[12.5px]">{d.period}</span>
               <span className="tabular-nums text-muted-foreground text-[12px]">{d.pct}%</span>
-              <span className="w-20 text-right tabular-nums text-[12.5px] font-medium">{d.kWh.toLocaleString("pt-BR")} kWh</span>
+              <span className="w-20 text-right tabular-nums text-[12.5px] font-medium">{formatNumber(d.kWh)} kWh</span>
             </li>
           ))}
         </ul>
@@ -93,24 +104,32 @@ export function ConsumptionByPeriodCard() {
   );
 }
 
-export function HealthScoreCard() {
+export function HealthScoreCard({ data }: { data: DashboardData }) {
+  const deviation = data.overview.desvio_meta_kwtr ?? null;
+  const baseScore = scoreFromDeviation(deviation);
+  const healthScores = [
+    { label: "Energia", value: baseScore, status: baseScore >= 85 ? "Muito Bom" : baseScore >= 70 ? "Bom" : "Atenção" },
+    { label: "Eficiência", value: baseScore, status: baseScore >= 85 ? "Muito Bom" : baseScore >= 70 ? "Bom" : "Atenção" },
+    { label: "Carbono", value: data.overview.carbono_ton ? 85 : 0, status: "Estimado" },
+    { label: "Operação", value: data.chillers.some((c) => c.online) ? 82 : 0, status: data.chillers.some((c) => c.online) ? "Bom" : "Standby" },
+    { label: "Estabilidade", value: data.analytics.series_15min.length ? 78 : 0, status: "Dados" },
+  ];
+
   return (
     <div className="glass-card rounded-2xl p-5">
       <div className="flex items-center justify-between">
         <h3 className="text-[15px] font-semibold tracking-tight">Score de saúde</h3>
-        <button className="text-xs font-medium text-efficiency hover:underline">Ver detalhes</button>
       </div>
       <div className="mt-5 grid grid-cols-5 gap-3">
         {healthScores.map((h) => {
-          const color = h.value >= 88 ? "var(--color-esg)" : h.value >= 84 ? "var(--color-efficiency)" : h.value >= 80 ? "var(--color-warning)" : "var(--color-critical)";
+          const color = h.value >= 88 ? "var(--color-esg)" : h.value >= 84 ? "var(--color-efficiency)" : h.value >= 70 ? "var(--color-warning)" : "var(--color-critical)";
           return (
             <div key={h.label} className="text-center">
               <div className="text-[11px] text-muted-foreground">{h.label}</div>
               <div className="relative mx-auto mt-2 grid h-16 w-16 place-items-center">
                 <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90">
                   <circle cx="50" cy="50" r="42" stroke="currentColor" className="text-muted/40" strokeWidth="9" fill="none" />
-                  <circle cx="50" cy="50" r="42" stroke={color} strokeWidth="9" strokeLinecap="round" fill="none"
-                    strokeDasharray={`${(h.value / 100) * 264} 264`} />
+                  <circle cx="50" cy="50" r="42" stroke={color} strokeWidth="9" strokeLinecap="round" fill="none" strokeDasharray={`${(h.value / 100) * 264} 264`} />
                 </svg>
                 <span className="text-lg font-semibold tabular-nums">{h.value}</span>
               </div>
@@ -121,16 +140,16 @@ export function HealthScoreCard() {
       </div>
       <div className="mt-5 grid grid-cols-3 gap-3 border-t border-border pt-4 text-[12px]">
         <div>
-          <div className="text-muted-foreground">Árvores equivalentes</div>
-          <div className="mt-0.5 font-semibold">{esgPerformance.treesEquivalent.toLocaleString("pt-BR")} 🌳</div>
+          <div className="text-muted-foreground">kWh/m²</div>
+          <div className="mt-0.5 font-semibold">{formatNumber(data.overview.kwh_m2, 6)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">Km evitados</div>
-          <div className="mt-0.5 font-semibold">{esgPerformance.kmAvoided.toLocaleString("pt-BR")} km</div>
+          <div className="text-muted-foreground">TRh/m²</div>
+          <div className="mt-0.5 font-semibold">{formatNumber(data.overview.trh_m2, 6)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">Meta ESG mensal</div>
-          <div className="mt-0.5 font-semibold text-efficiency">{esgPerformance.goalReachedPct}% atingida</div>
+          <div className="text-muted-foreground">kW pico/m²</div>
+          <div className="mt-0.5 font-semibold text-efficiency">{formatNumber(data.overview.kw_pico_m2, 6)}</div>
         </div>
       </div>
     </div>

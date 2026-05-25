@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageTitle } from "@/components/layout/PageTitle";
+import { DASHBOARD_DATA_URL, N8N_WEBHOOK_URL } from "@/lib/dashboard-data";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings — Building ESG Performance" }, { name: "description", content: "Parâmetros operacionais, baselines, tarifas e metas ESG." }] }),
@@ -20,51 +21,48 @@ function Field({ label, value, unit }: { label: string; value: string; unit?: st
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="glass-card rounded-2xl p-5">
-      <h3 className="text-[15px] font-semibold tracking-tight">{title}</h3>
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">{children}</div>
-    </div>
-  );
+  return <div className="glass-card rounded-2xl p-5"><h3 className="text-[15px] font-semibold tracking-tight">{title}</h3><div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">{children}</div></div>;
 }
 
 function SettingsPage() {
   return (
     <AppShell>
-      <PageTitle title="Settings" subtitle="Configurações da plataforma, baselines e metas ESG" />
+      <PageTitle title="Settings" subtitle="Parâmetros provisórios usados pelo n8n e pelo dashboard" />
+
+      <Card title="Integração n8n">
+        <Field label="Endpoint usado pelo dashboard" value={DASHBOARD_DATA_URL} />
+        <Field label="Webhook n8n" value={N8N_WEBHOOK_URL} />
+      </Card>
 
       <Card title="Carbono & Energia">
-        <Field label="Fator de emissão de carbono" value="0,442" unit="kgCO₂e/kWh" />
-        <Field label="Tarifa de energia" value="0,82" unit="R$/kWh" />
-        <Field label="Baseline energético mensal" value="465.000" unit="kWh" />
-        <Field label="Baseline diário" value="15.000" unit="kWh" />
+        <Field label="Fator nacional de emissão de carbono" value="0,0385" unit="kgCO₂e/kWh" />
+        <Field label="Tarifa de energia" value="A definir" unit="R$/kWh" />
+        <Field label="Baseline energético diário" value="A definir" unit="kWh" />
+        <Field label="Intervalo de coleta" value="0,25" unit="h" />
       </Card>
 
       <Card title="Metas ESG">
-        <Field label="Meta mensal de kWh" value="420.000" unit="kWh" />
-        <Field label="Meta mensal de CO₂e" value="185" unit="tCO₂e" />
-        <Field label="Eficiência aceitável (kW/TR)" value="0,68" />
-        <Field label="Delta-T mínimo aceitável" value="5,0" unit="°C" />
+        <Field label="Eficiência meta" value="0,88" unit="kW/TR" />
+        <Field label="Meta mensal de CO₂e" value="A definir" unit="tCO₂e" />
+        <Field label="Delta-T mínimo aceitável" value="4,0" unit="°C" />
+        <Field label="Delta-T ideal" value="5,5" unit="°C" />
       </Card>
 
       <Card title="Edifício">
-        <Field label="Área atendida" value="42.500" unit="m²" />
-        <Field label="Horário operacional esperado" value="07:00 – 22:00" />
+        <Field label="Área climatizada" value="A definir" unit="m²" />
+        <Field label="Horário operacional esperado" value="08:00 – 18:00" />
         <Field label="Unidade de vazão" value="m³/h" />
-        <Field label="Capacidade nominal total" value="2.000" unit="TR" />
+        <Field label="Capacidade nominal total" value="Opcional" unit="TR" />
       </Card>
 
       <Card title="Nomes dos chillers">
-        <Field label="Chiller 01" value="Chiller 01 — Carrier 23XRV" />
-        <Field label="Chiller 02" value="Chiller 02 — Carrier 23XRV" />
-        <Field label="Chiller 03" value="Chiller 03 — Carrier 23XRV" />
-        <Field label="Chiller 04" value="Chiller 04 — Carrier 23XRV" />
-        <Field label="Chiller 05" value="Chiller 05 — Carrier 23XRV" />
+        <Field label="UR1" value="UR1" />
+        <Field label="UR2" value="UR2" />
+        <Field label="UR3" value="UR3" />
       </Card>
 
-      <div className="flex justify-end gap-2">
-        <button className="rounded-xl border border-border bg-card px-4 py-2.5 text-sm">Descartar</button>
-        <button className="rounded-xl bg-efficiency px-4 py-2.5 text-sm font-medium text-background">Salvar alterações</button>
+      <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+        Estes campos ainda são visuais. A persistência definitiva deve gravar os parâmetros no Redis/banco ou no próprio workflow n8n.
       </div>
     </AppShell>
   );

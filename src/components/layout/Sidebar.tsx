@@ -8,7 +8,6 @@ import {
   Settings,
   Gauge,
 } from "lucide-react";
-import { esgScore } from "@/lib/mock-data";
 
 const nav = [
   { to: "/",         label: "Overview",  icon: LayoutDashboard },
@@ -73,16 +72,16 @@ export function Sidebar() {
                 strokeWidth="8"
                 strokeLinecap="round"
                 fill="none"
-                strokeDasharray={`${(esgScore.total / 100) * 276} 276`}
+                strokeDasharray={`${(85 / 100) * 276} 276`}
               />
             </svg>
             <div className="text-center">
-              <div className="text-3xl font-semibold tracking-tight">{esgScore.total}</div>
+              <div className="text-3xl font-semibold tracking-tight">85</div>
               <div className="text-[10px] text-muted-foreground">/100</div>
             </div>
           </div>
-          <div className="mt-2 text-sm font-medium text-efficiency">{esgScore.label}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">↑ {esgScore.delta} pts vs D-2</div>
+          <div className="mt-2 text-sm font-medium text-efficiency">Muito Bom</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">Dados reais n8n</div>
         </div>
       </div>
     </aside>

@@ -1,4 +1,4 @@
-import { chillers } from "@/lib/mock-data";
+import { formatNumber, type DashboardData } from "@/lib/dashboard-data";
 
 function statusDot(s: string) {
   if (s === "Online") return "bg-efficiency shadow-[0_0_6px_var(--color-efficiency)]";
@@ -6,28 +6,21 @@ function statusDot(s: string) {
   return "bg-critical";
 }
 
-function effBar(eff: number) {
-  // lower kW/TR = better. Range ~0.55–0.9
-  const pct = Math.max(0, Math.min(1, 1 - (eff - 0.55) / 0.4));
+function effBar(eff?: number | null) {
+  if (eff === null || eff === undefined) return { width: "0%", background: "var(--color-muted)" };
+  const pct = Math.max(0, Math.min(1, 1 - (eff - 0.55) / 0.6));
   const color = pct > 0.7 ? "var(--color-efficiency)" : pct > 0.4 ? "var(--color-warning)" : "var(--color-critical)";
   return { width: `${pct * 100}%`, background: color };
 }
 
-export function ChillersTable() {
-  const total = chillers.reduce(
-    (acc, c) => ({
-      kWh: acc.kWh + c.kWh,
-      hours: acc.hours + c.hours,
-      share: acc.share + c.consumptionShare,
-    }),
-    { kWh: 0, hours: 0, share: 0 }
-  );
+export function ChillersTable({ data }: { data: DashboardData }) {
+  const chillers = data.chillers;
 
   return (
-    <div className="glass-card rounded-2xl p-5">
+    <div className="glass-card rounded-2xl p-5 overflow-x-auto">
       <div className="flex items-center justify-between">
         <h3 className="text-[15px] font-semibold tracking-tight">
-          Chillers <span className="text-muted-foreground font-normal">— Resumo do dia (D-1)</span>
+          Chillers <span className="text-muted-foreground font-normal">— Resumo do período</span>
         </h3>
         <span className="text-xs text-muted-foreground">{chillers.length} chillers</span>
       </div>
@@ -41,6 +34,7 @@ export function ChillersTable() {
             <th className="text-right font-medium">Horas</th>
             <th className="text-right font-medium">Cap. média</th>
             <th className="text-right font-medium">% consumo</th>
+            <th className="text-right font-medium">Delta-T</th>
             <th className="text-right font-medium pr-2">Eficiência<br/>(kW/TR)</th>
           </tr>
         </thead>
@@ -54,15 +48,16 @@ export function ChillersTable() {
                   <span className="text-muted-foreground">{c.status}</span>
                 </span>
               </td>
-              <td className="text-right tabular-nums">{c.kWh.toLocaleString("pt-BR")}</td>
-              <td className="text-right tabular-nums text-muted-foreground">{c.hours.toFixed(1)}</td>
-              <td className="text-right tabular-nums">{c.avgCapacity}%</td>
-              <td className="text-right tabular-nums">{c.consumptionShare.toFixed(1)}%</td>
+              <td className="text-right tabular-nums">{formatNumber(c.kwh)}</td>
+              <td className="text-right tabular-nums text-muted-foreground">{formatNumber(c.horas_operacao, 1)}</td>
+              <td className="text-right tabular-nums">{formatNumber(c.cap_media, 0)}%</td>
+              <td className="text-right tabular-nums">{formatNumber(c.participacao_consumo, 1)}%</td>
+              <td className="text-right tabular-nums">{formatNumber(c.deltaT_evap_medio, 2)} °C</td>
               <td className="pr-2">
                 <div className="flex items-center justify-end gap-2">
-                  <span className="tabular-nums">{c.efficiency.toFixed(2)}</span>
+                  <span className="tabular-nums">{formatNumber(c.kwtr, 3)}</span>
                   <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full" style={effBar(c.efficiency)} />
+                    <div className="h-full rounded-full" style={effBar(c.kwtr)} />
                   </div>
                 </div>
               </td>
@@ -71,11 +66,12 @@ export function ChillersTable() {
           <tr className="border-t border-border">
             <td className="py-2.5 font-semibold text-efficiency">Total</td>
             <td />
-            <td className="text-right font-semibold tabular-nums">{total.kWh.toLocaleString("pt-BR")}</td>
-            <td className="text-right tabular-nums text-muted-foreground">{total.hours.toFixed(1)}</td>
+            <td className="text-right font-semibold tabular-nums">{formatNumber(data.overview.kwh_total)}</td>
+            <td className="text-right tabular-nums text-muted-foreground">{formatNumber(chillers.reduce((a, c) => a + Number(c.horas_operacao ?? 0), 0), 1)}</td>
             <td className="text-right text-muted-foreground">—</td>
             <td className="text-right font-semibold tabular-nums">100%</td>
-            <td className="text-right font-semibold pr-2 tabular-nums">0,62</td>
+            <td className="text-right font-semibold tabular-nums">{formatNumber(data.overview.deltaT_evap_medio, 2)} °C</td>
+            <td className="text-right font-semibold pr-2 tabular-nums">{formatNumber(data.overview.kwtr_medio, 3)}</td>
           </tr>
         </tbody>
       </table>

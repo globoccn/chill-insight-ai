@@ -18,6 +18,30 @@ async function getServerEntry(): Promise<ServerEntry> {
   return serverEntryPromise;
 }
 
+
+const N8N_DASHBOARD_WEBHOOK_URL = "https://ancar-n8n.gpfgqx.easypanel.host/webhook/dados-globo-vm22";
+
+async function proxyDashboardRequest(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const isUpload = url.pathname === "/api/dashboard/upload";
+  const target = new URL(N8N_DASHBOARD_WEBHOOK_URL);
+  target.search = url.search;
+
+  const headers = isUpload ? new Headers(request.headers) : new Headers({ accept: "application/json" });
+  headers.delete("host");
+
+  const init: RequestInit = {
+    method: isUpload ? "POST" : "GET",
+    headers,
+    body: isUpload ? request.body : undefined,
+  };
+
+  const response = await fetch(target.toString(), init);
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", "*");
+  return new Response(response.body, { status: response.status, headers });
+}
+
 function brandedErrorResponse(): Response {
   return new Response(renderErrorPage(), {
     status: 500,
@@ -68,6 +92,11 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    const url = new URL(request.url);
+    if (url.pathname === "/api/dashboard" || url.pathname === "/api/dashboard/upload") {
+      return proxyDashboardRequest(request);
+    }
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

@@ -215,8 +215,36 @@ function normalize(payload: unknown): DashboardData {
   };
 }
 
+function parseDateLike(value?: string | null) {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+
+  const native = new Date(text);
+  if (!Number.isNaN(native.getTime())) return native;
+
+  // Aceita formatos comuns vindos do n8n/CSV, como "24/05/2026, 23:45" ou "24/05/2026 23:45".
+  const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2}))?/);
+  if (match) {
+    const [, dd, mm, yyyy, hh = "00", mi = "00"] = match;
+    const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi));
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return null;
+}
+
 function dateKey(value?: string | null) {
-  return value?.split("T")[0] || null;
+  const parsed = parseDateLike(value);
+  if (!parsed) return value?.split("T")[0]?.slice(0, 10) || null;
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function timeValue(value?: string | null) {
+  return parseDateLike(value)?.getTime() ?? 0;
 }
 
 function asNumber(value: unknown, fallback = 0) {
@@ -285,33 +313,74 @@ function aggregatePointsForDay(date: string, points: DashboardPoint[], settings:
 }
 
 
+function downsampleSparkline(points: KpiPoint[], maxPoints = 42): KpiPoint[] {
+  const valid = points.filter((p) => Number.isFinite(Number(p.v)));
+  if (valid.length <= maxPoints) return valid;
+
+  const bucketSize = Math.ceil(valid.length / maxPoints);
+  const sampled: KpiPoint[] = [];
+
+  for (let i = 0; i < valid.length; i += bucketSize) {
+    const bucket = valid.slice(i, i + bucketSize);
+    if (!bucket.length) continue;
+
+    // Preserva melhor picos/vales que uma média simples: alterna pontos extremos por bucket.
+    const values = bucket.map((p) => Number(p.v));
+    const avg = values.reduce((acc, v) => acc + v, 0) / values.length;
+    const extreme = bucket.reduce((chosen, point) =>
+      Math.abs(Number(point.v) - avg) > Math.abs(Number(chosen.v) - avg) ? point : chosen,
+    bucket[0]);
+
+    sampled.push({ t: extreme.t, v: Number(extreme.v) });
+  }
+
+  return sampled;
+}
+
 function buildDailyTrends(allPoints: DashboardPoint[], selectedDate: string | null, settings: Record<string, unknown> = {}, esg: DashboardData["esg"] = {}): Record<string, KpiPoint[]> {
   const dates = Array.from(new Set(allPoints.map((p) => dateKey(p.timestamp)).filter(Boolean) as string[])).sort();
   const reference = selectedDate || dates.at(-1) || null;
   const trendDates = reference
     ? dates.filter((d) => d <= reference).slice(-7)
     : dates.slice(-7);
+  const allowedDates = new Set(trendDates);
+  const intervalHours = asNumber(settings.intervalo_horas, 0.25);
+  const carbonFactor = asNumber(esg?.fator_carbono_kgco2_kwh ?? settings.fator_carbono_kgco2_kwh, 0.0385);
+  const meta = asNumber(settings.meta_kwtr, 0.88);
 
-  const aggregates = trendDates.map((date) => aggregatePointsForDay(date, allPoints, settings, esg));
-  const point = (date: string, value: number | null | undefined): KpiPoint => ({
-    t: date.slice(5),
+  const points = allPoints
+    .filter((p) => allowedDates.has(dateKey(p.timestamp) || ""))
+    .slice()
+    .sort((a, b) => timeValue(a.timestamp) - timeValue(b.timestamp));
+
+  const point = (p: DashboardPoint, value: number | null | undefined): KpiPoint => ({
+    t: p.timestamp || "",
     v: Number.isFinite(Number(value)) ? Number(value) : 0,
   });
 
+  const hoursAccumulator = (() => {
+    let total = 0;
+    return (p: DashboardPoint) => {
+      if (asNumber(p.kw_total) > 0 || asNumber(p.tr_total) > 0) total += intervalHours;
+      return roundValue(total, 2);
+    };
+  })();
+
   return {
-    energy: aggregates.map((d) => point(d.date, d.kwh_total)),
-    carbon: aggregates.map((d) => point(d.date, d.carbono_ton)),
-    eff: aggregates.map((d) => point(d.date, d.kwtr_medio)),
-    cop: aggregates.map((d) => point(d.date, d.cop_medio)),
-    trh: aggregates.map((d) => point(d.date, d.trh_total)),
-    deltaT: aggregates.map((d) => point(d.date, d.deltaT_evap_medio)),
-    peak: aggregates.map((d) => point(d.date, d.pico_kw)),
-    hours: aggregates.map((d) => point(d.date, d.horas_operacao)),
-    baseline: aggregates.map((d) => {
-      const meta = asNumber(settings.meta_kwtr, 0.88);
-      const desvio = d.kwtr_medio !== null && meta > 0 ? ((d.kwtr_medio - meta) / meta) * 100 : null;
-      return point(d.date, roundValue(desvio, 2));
-    }),
+    // Mini trends dos cards: leituras reais dos últimos 7 dias, reamostradas para manter picos e vales.
+    energy: downsampleSparkline(points.map((p) => point(p, p.kwh_total))),
+    carbon: downsampleSparkline(points.map((p) => point(p, ((asNumber(p.kwh_total) * carbonFactor) / 1000)))),
+    eff: downsampleSparkline(points.map((p) => point(p, p.kwtr_real))),
+    cop: downsampleSparkline(points.map((p) => point(p, p.cop_real))),
+    trh: downsampleSparkline(points.map((p) => point(p, p.trh_total))),
+    deltaT: downsampleSparkline(points.map((p) => point(p, p.deltaT_evap_medio))),
+    peak: downsampleSparkline(points.map((p) => point(p, p.kw_total))),
+    hours: downsampleSparkline(points.map((p) => point(p, hoursAccumulator(p)))),
+    baseline: downsampleSparkline(points.map((p) => {
+      const kwtr = asNumber(p.kwtr_real);
+      const desvio = kwtr > 0 && meta > 0 ? ((kwtr - meta) / meta) * 100 : null;
+      return point(p, roundValue(desvio, 2));
+    })),
   };
 }
 

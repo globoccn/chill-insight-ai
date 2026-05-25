@@ -22,9 +22,38 @@ function TrendLine({ value, goodWhen }: { value: number; goodWhen: DashboardKpi[
   );
 }
 
+function buildVisualSparkline(points: DashboardKpi["sparkline"]) {
+  const values = points
+    .map((p) => Number(p.v))
+    .filter((v) => Number.isFinite(v));
+
+  if (values.length < 2) return [];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+
+  // O sparkline do KPI é visual: ele deve mostrar a forma das leituras dos últimos 7 dias.
+  // Normalizamos para a altura do mini gráfico, evitando que métricas de base alta fiquem retas.
+  return points.map((p, index) => {
+    const value = Number(p.v);
+    const normalized = range > 0
+      ? 18 + ((value - min) / range) * 64
+      : 50;
+
+    return {
+      ...p,
+      index,
+      y: normalized,
+      raw: value,
+    };
+  });
+}
+
 export function KpiCard({ kpi, icon }: { kpi: DashboardKpi; icon?: React.ReactNode }) {
   const c = colorVar[kpi.color];
   const id = `kpi-${kpi.key}`;
+  const sparklineData = buildVisualSparkline(kpi.sparkline);
 
   return (
     <div className="control-card group relative min-h-[154px] overflow-hidden rounded-xl p-3.5 transition duration-300 hover:-translate-y-0.5 hover:border-foreground/15">
@@ -50,16 +79,34 @@ export function KpiCard({ kpi, icon }: { kpi: DashboardKpi; icon?: React.ReactNo
       {kpi.extra ? <div className="relative mt-1 text-[10.5px] text-muted-foreground line-clamp-1">{kpi.extra}</div> : null}
 
       <div className="relative mt-2 h-9 -mx-1">
-        {kpi.sparkline.length > 1 ? (
+        {sparklineData.length > 1 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={kpi.sparkline} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
+            <AreaChart data={sparklineData} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
               <defs>
                 <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={c} stopOpacity={0.55} />
+                  <stop offset="0%" stopColor={c} stopOpacity={0.50} />
+                  <stop offset="62%" stopColor={c} stopOpacity={0.16} />
                   <stop offset="100%" stopColor={c} stopOpacity={0} />
                 </linearGradient>
+                <filter id={`${id}-glow`} x="-20%" y="-60%" width="140%" height="220%">
+                  <feGaussianBlur stdDeviation="2.4" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
               </defs>
-              <Area type="monotone" dataKey="v" stroke={c} strokeWidth={1.8} fill={`url(#${id})`} dot={false} isAnimationActive={false} />
+              <Area
+                type="monotone"
+                dataKey="y"
+                stroke={c}
+                strokeWidth={2.2}
+                fill={`url(#${id})`}
+                dot={false}
+                activeDot={false}
+                isAnimationActive={false}
+                filter={`url(#${id}-glow)`}
+              />
             </AreaChart>
           </ResponsiveContainer>
         ) : (

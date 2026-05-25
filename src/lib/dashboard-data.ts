@@ -106,6 +106,7 @@ export interface DashboardData {
       vs_7d_avg_percent: number | null;
     }>;
   };
+  daily_trends?: Record<string, KpiPoint[]>;
 }
 
 export interface KpiPoint { t: string; v: number }
@@ -129,6 +130,7 @@ const emptyData: DashboardData = {
   esg: {},
   reports: { insights: [] },
   comparisons: { metrics: {} },
+  daily_trends: {},
 };
 
 export function formatNumber(value: number | null | undefined, decimals = 0) {
@@ -209,6 +211,7 @@ function normalize(payload: unknown): DashboardData {
     esg: data.esg ?? {},
     reports: data.reports ?? { insights: [] },
     comparisons: data.comparisons ?? { metrics: {} },
+    daily_trends: data.daily_trends ?? {},
   };
 }
 
@@ -278,6 +281,37 @@ function aggregatePointsForDay(date: string, points: DashboardPoint[], settings:
     deltaT_evap_medio: roundValue(avgValues(dayPoints.filter((p) => asNumber(p.tr_total) > 0), (p) => p.deltaT_evap_medio), 2),
     pico_kw: roundValue(picoKw, 2),
     horas_operacao: roundValue(horas, 2),
+  };
+}
+
+
+function buildDailyTrends(allPoints: DashboardPoint[], selectedDate: string | null, settings: Record<string, unknown> = {}, esg: DashboardData["esg"] = {}): Record<string, KpiPoint[]> {
+  const dates = Array.from(new Set(allPoints.map((p) => dateKey(p.timestamp)).filter(Boolean) as string[])).sort();
+  const reference = selectedDate || dates.at(-1) || null;
+  const trendDates = reference
+    ? dates.filter((d) => d <= reference).slice(-7)
+    : dates.slice(-7);
+
+  const aggregates = trendDates.map((date) => aggregatePointsForDay(date, allPoints, settings, esg));
+  const point = (date: string, value: number | null | undefined): KpiPoint => ({
+    t: date.slice(5),
+    v: Number.isFinite(Number(value)) ? Number(value) : 0,
+  });
+
+  return {
+    energy: aggregates.map((d) => point(d.date, d.kwh_total)),
+    carbon: aggregates.map((d) => point(d.date, d.carbono_ton)),
+    eff: aggregates.map((d) => point(d.date, d.kwtr_medio)),
+    cop: aggregates.map((d) => point(d.date, d.cop_medio)),
+    trh: aggregates.map((d) => point(d.date, d.trh_total)),
+    deltaT: aggregates.map((d) => point(d.date, d.deltaT_evap_medio)),
+    peak: aggregates.map((d) => point(d.date, d.pico_kw)),
+    hours: aggregates.map((d) => point(d.date, d.horas_operacao)),
+    baseline: aggregates.map((d) => {
+      const meta = asNumber(settings.meta_kwtr, 0.88);
+      const desvio = d.kwtr_medio !== null && meta > 0 ? ((d.kwtr_medio - meta) / meta) * 100 : null;
+      return point(d.date, roundValue(desvio, 2));
+    }),
   };
 }
 
@@ -375,11 +409,12 @@ function scopeDashboardDataToAnalyzedDate(data: DashboardData): DashboardData {
   const allPoints = Array.isArray(data.analytics?.series_15min) ? data.analytics.series_15min : [];
   const selectedDate = dateKey(data.overview?.periodo_fim) || dateKey(allPoints.at(-1)?.timestamp);
   const comparisons = buildComparisons(allPoints, selectedDate, data.settings ?? {}, data.esg ?? {});
+  const daily_trends = buildDailyTrends(allPoints, selectedDate, data.settings ?? {}, data.esg ?? {});
 
-  if (!selectedDate || !allPoints.length) return { ...data, comparisons };
+  if (!selectedDate || !allPoints.length) return { ...data, comparisons, daily_trends };
 
   const points = allPoints.filter((point) => dateKey(point.timestamp) === selectedDate);
-  if (!points.length || points.length === allPoints.length) return { ...data, comparisons };
+  if (!points.length || points.length === allPoints.length) return { ...data, comparisons, daily_trends };
 
   const intervalHours = asNumber(data.settings?.intervalo_horas, 0.25);
   const metaKwtr = asNumber(data.overview.kwtr_meta ?? data.settings?.meta_kwtr, 0.88);
@@ -440,6 +475,7 @@ function scopeDashboardDataToAnalyzedDate(data: DashboardData): DashboardData {
       desvio_meta_kwtr: overview.desvio_meta_kwtr,
     },
     comparisons,
+    daily_trends,
     reports: {
       ...(data.reports ?? {}),
       resumo: {
@@ -613,6 +649,12 @@ function spark(points: DashboardPoint[], key: keyof DashboardPoint): KpiPoint[] 
   }));
 }
 
+function trend(data: DashboardData, key: string, fallbackPoints: DashboardPoint[] = [], fallbackKey?: keyof DashboardPoint): KpiPoint[] {
+  const daily = data.daily_trends?.[key] ?? [];
+  if (daily.length > 1) return daily;
+  return fallbackKey ? spark(fallbackPoints, fallbackKey) : [];
+}
+
 export function buildKpis(data: DashboardData): DashboardKpi[] {
   const o = data.overview;
   const s = data.analytics.series_15min;
@@ -624,15 +666,15 @@ export function buildKpis(data: DashboardData): DashboardKpi[] {
   });
 
   return [
-    { key: "energy", label: "Energia consumida", value: formatNumber(o.kwh_total), unit: "kWh", ...withComp("energy"), goodWhen: "down", color: "water", sparkline: spark(s, "kwh_total") },
-    { key: "carbon", label: "Carbono emitido", value: formatNumber(o.carbono_ton, 3), unit: "tCO₂e", ...withComp("carbon"), goodWhen: "down", color: "carbon", sparkline: spark(s, "carbono_ton") },
-    { key: "eff", label: "Eficiência média", value: formatNumber(o.kwtr_medio, 3), unit: "kW/TR", ...withComp("eff"), goodWhen: "down", color: "efficiency", sparkline: spark(s, "kwtr_real"), extra: `Meta: ${formatNumber(o.kwtr_meta, 2)} kW/TR` },
-    { key: "cop", label: "COP médio", value: formatNumber(o.cop_medio, 2), unit: "", ...withComp("cop"), goodWhen: "up", color: "esg", sparkline: spark(s, "cop_real") },
-    { key: "trh", label: "TRh produzido", value: formatNumber(o.trh_total), unit: "TRh", ...withComp("trh"), goodWhen: "up", color: "water", sparkline: spark(s, "trh_total") },
-    { key: "deltaT", label: "Delta-T médio", value: formatNumber(o.deltaT_evap_medio, 2), unit: "°C", ...withComp("deltaT"), goodWhen: "up", color: "water", sparkline: spark(s, "deltaT_evap_medio") },
-    { key: "peak", label: "Pico de demanda", value: formatNumber(o.pico_kw), unit: "kW", ...withComp("peak"), goodWhen: "down", color: "warning", sparkline: spark(s, "kw_total"), extra: `Hora pico: ${formatDateTime(o.hora_pico)}` },
-    { key: "hours", label: "Horas operação", value: formatNumber(totalHours, 1), unit: "h", ...withComp("hours"), goodWhen: "up", color: "warning", sparkline: [] },
-    { key: "baseline", label: "Economia vs baseline", value: formatNumber(o.desvio_meta_kwtr, 2), unit: "%", dod: Number(o.desvio_meta_kwtr ?? 0), d7: 0, goodWhen: "down", color: "efficiency", sparkline: [], extra: "Meta configurável" },
+    { key: "energy", label: "Energia consumida", value: formatNumber(o.kwh_total), unit: "kWh", ...withComp("energy"), goodWhen: "down", color: "water", sparkline: trend(data, "energy", s, "kwh_total") },
+    { key: "carbon", label: "Carbono emitido", value: formatNumber(o.carbono_ton, 3), unit: "tCO₂e", ...withComp("carbon"), goodWhen: "down", color: "carbon", sparkline: trend(data, "carbon", s, "carbono_ton") },
+    { key: "eff", label: "Eficiência média", value: formatNumber(o.kwtr_medio, 3), unit: "kW/TR", ...withComp("eff"), goodWhen: "down", color: "efficiency", sparkline: trend(data, "eff", s, "kwtr_real"), extra: `Meta: ${formatNumber(o.kwtr_meta, 2)} kW/TR` },
+    { key: "cop", label: "COP médio", value: formatNumber(o.cop_medio, 2), unit: "", ...withComp("cop"), goodWhen: "up", color: "esg", sparkline: trend(data, "cop", s, "cop_real") },
+    { key: "trh", label: "TRh produzido", value: formatNumber(o.trh_total), unit: "TRh", ...withComp("trh"), goodWhen: "up", color: "water", sparkline: trend(data, "trh", s, "trh_total") },
+    { key: "deltaT", label: "Delta-T médio", value: formatNumber(o.deltaT_evap_medio, 2), unit: "°C", ...withComp("deltaT"), goodWhen: "up", color: "water", sparkline: trend(data, "deltaT", s, "deltaT_evap_medio") },
+    { key: "peak", label: "Pico de demanda", value: formatNumber(o.pico_kw), unit: "kW", ...withComp("peak"), goodWhen: "down", color: "warning", sparkline: trend(data, "peak", s, "kw_total"), extra: `Hora pico: ${formatDateTime(o.hora_pico)}` },
+    { key: "hours", label: "Horas operação", value: formatNumber(totalHours, 1), unit: "h", ...withComp("hours"), goodWhen: "up", color: "warning", sparkline: trend(data, "hours") },
+    { key: "baseline", label: "Economia vs baseline", value: formatNumber(o.desvio_meta_kwtr, 2), unit: "%", dod: Number(o.desvio_meta_kwtr ?? 0), d7: 0, goodWhen: "down", color: "efficiency", sparkline: trend(data, "baseline"), extra: "Meta configurável" },
   ];
 }
 

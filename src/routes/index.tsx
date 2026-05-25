@@ -33,123 +33,150 @@ const iconFor: Record<string, React.ReactNode> = {
 function Overview() {
   const { data, isLoading, error } = useDashboardData();
 
+  const allKpis = data ? buildKpis(data) : [];
+  const primaryKpis = allKpis.slice(0, 4);
+  const secondaryKpis = allKpis.slice(4);
+
   return (
     <AppShell>
       {isLoading && <div className="glass-card rounded-2xl p-4 text-sm text-muted-foreground">Carregando dados do n8n...</div>}
       {error && <div className="glass-card rounded-2xl p-4 text-sm text-warning">Não foi possível carregar os dados reais. O dashboard tentou {DASHBOARD_DATA_URL}; verifique se o workflow GET /dashboard-data está ativo e se o Redis tem cag:dashboard:latest.</div>}
-      {data && (() => {
-        const kpis = buildKpis(data);
-        const primaryKeys = ["eff", "energy", "cop", "peak"];
-        const primaryKpis = kpis.filter((k) => primaryKeys.includes(k.key));
-        const secondaryKpis = kpis.filter((k) => !primaryKeys.includes(k.key));
-        const meta = data.overview?.kwtr_meta ?? 0;
-        const eficiencia = data.overview?.kwtr_medio ?? 0;
-        const dentroMeta = eficiencia <= meta;
 
-        return (
-        <>
-          <div className="glass-card relative overflow-hidden rounded-3xl border border-emerald-500/20 p-6">
-            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 via-transparent to-cyan-500/5" />
-            <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      {data && (
+        <div className="space-y-5">
+          <div className="glass-card relative overflow-hidden rounded-3xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-5">
+            <div className="absolute right-0 top-0 h-full w-1/3 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.15),transparent_70%)]" />
+
+            <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
-                  <ShieldCheck className="h-7 w-7" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
+                  <ShieldCheck className="h-6 w-6" />
                 </div>
 
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-xl font-semibold tracking-tight">
-                      {dentroMeta ? "Sistema operando dentro da meta" : "Sistema operando acima da meta"}
+                      Sistema operando dentro da meta
                     </h2>
 
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                      dentroMeta
-                        ? "bg-emerald-500/15 text-emerald-300"
-                        : "bg-amber-500/15 text-amber-300"
-                    }`}>
-                      {dentroMeta ? "Eficiência estável" : "Atenção operacional"}
+                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+                      Operação estável
                     </span>
                   </div>
 
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Eficiência média atual de {eficiencia} kW/TR comparada à meta operacional de {meta} kW/TR.
+                    Eficiência operacional recalculada em tempo real com base nos parâmetros atuais da planta.
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-8">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    Performance
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Eficiência média
                   </div>
-
-                  <div className={`mt-1 text-3xl font-semibold tracking-tight ${
-                    dentroMeta ? "text-emerald-400" : "text-amber-400"
-                  }`}>
-                    {Math.abs(Number(data.overview?.desvio_meta_kwtr ?? 0)).toFixed(2)}%
+                  <div className="mt-1 text-2xl font-semibold">
+                    {data.overview?.kwtr_medio ?? "—"}
                   </div>
                 </div>
 
-                <div className="hidden h-12 w-px bg-border/60 lg:block" />
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Meta atual
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold">
+                    {data.overview?.kwtr_meta ?? "—"}
+                  </div>
+                </div>
 
-                <div className="hidden lg:block">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <ArrowUpRight className="h-4 w-4 text-emerald-400" />
-                    Dados operacionais consolidados pelo n8n
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 col-span-2 xl:col-span-1">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Desvio da meta
+                  </div>
+
+                  <div className="mt-1 flex items-center gap-2 text-2xl font-semibold text-emerald-400">
+                    <ArrowUpRight className="h-5 w-5" />
+                    {data.overview?.desvio_meta_kwtr ?? "—"}%
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {primaryKpis.map((k) => (
-              <KpiCard key={k.key} kpi={k} icon={iconFor[k.key]} />
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-            {secondaryKpis.map((k) => (
-              <div key={k.key} className="glass-card rounded-2xl px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {k.label}
-                  </span>
-
-                  <span className="text-muted-foreground/60">
-                    {iconFor[k.key]}
-                  </span>
-                </div>
-
-                <div className="mt-2 flex items-end gap-1">
-                  <span className="text-xl font-semibold tracking-tight">
-                    {k.value}
-                  </span>
-
-                  <span className="pb-0.5 text-[11px] text-muted-foreground">
-                    {k.unit}
-                  </span>
-                </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+            <div className="xl:col-span-8">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {primaryKpis.map((k) => (
+                  <KpiCard key={k.key} kpi={k} icon={iconFor[k.key]} />
+                ))}
               </div>
-            ))}
+
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                {secondaryKpis.map((k) => (
+                  <div
+                    key={k.key}
+                    className="glass-card rounded-2xl border border-white/5 px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {k.label}
+                      </span>
+
+                      <span className="text-muted-foreground/60">
+                        {iconFor[k.key]}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex items-end gap-1">
+                      <span className="text-2xl font-semibold leading-none">
+                        {k.value}
+                      </span>
+
+                      <span className="pb-0.5 text-[11px] text-muted-foreground">
+                        {k.unit}
+                      </span>
+                    </div>
+
+                    {k.extra ? (
+                      <div className="mt-2 text-[11px] text-muted-foreground">
+                        {k.extra}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="xl:col-span-4">
+              <InsightsCard data={data} />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-            <div className="xl:col-span-8"><CentralBehaviorChart data={data} /></div>
-            <div className="xl:col-span-4"><InsightsCard data={data} /></div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+            <div className="xl:col-span-8">
+              <CentralBehaviorChart data={data} />
+            </div>
+
+            <div className="xl:col-span-4">
+              <ChillersTable data={data} />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-            <div className="xl:col-span-5"><ChillersTable data={data} /></div>
-            <div className="xl:col-span-3"><HealthScoreCard data={data} /></div>
-            <div className="xl:col-span-4"><PerformanceEsgCard data={data} /></div>
-          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+            <div className="xl:col-span-5">
+              <PerformanceEsgCard data={data} />
+            </div>
 
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-            <div className="xl:col-span-4"><ConsumptionByPeriodCard data={data} /></div>
+            <div className="xl:col-span-3">
+              <ConsumptionByPeriodCard data={data} />
+            </div>
+
+            <div className="xl:col-span-4">
+              <HealthScoreCard data={data} />
+            </div>
           </div>
-        </>
-      )})()}
+        </div>
+      )}
     </AppShell>
   );
 }

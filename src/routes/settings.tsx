@@ -199,9 +199,13 @@ function SettingsPage() {
 
     setSavedMessage(
       persisted
-        ? `Settings salvas e confirmadas no Redis cag:settings via ${result.source ?? result.endpoint ?? "endpoint configurado"}.`
-        : `Settings enviadas via ${result.source ?? result.endpoint ?? "endpoint configurado"}. Não foi possível confirmar leitura imediata do Redis pelo dashboard.`,
+        ? `Settings salvas e confirmadas no Redis cag:settings via ${result.source ?? result.endpoint ?? "endpoint configurado"}. Atualizando a página...`
+        : `Settings enviadas via ${result.source ?? result.endpoint ?? "endpoint configurado"}. Atualizando a página...`,
     );
+
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 700);
   };
 
   return (

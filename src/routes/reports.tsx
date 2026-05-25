@@ -5,7 +5,7 @@ import { CentralBehaviorChart } from "@/components/dashboard/CentralBehaviorChar
 import { ChillersTable } from "@/components/dashboard/ChillersTable";
 import { PerformanceEsgCard } from "@/components/dashboard/EsgCards";
 import { InsightsCard } from "@/components/dashboard/InsightsCard";
-import { buildInsights, buildKpis, formatDateTime, formatNumber, useDashboardData } from "@/lib/dashboard-data";
+import { buildInsights, buildKpis, formatDateTime, formatNumber, useDashboardDataFull } from "@/lib/dashboard-data";
 import { Download, FileText } from "lucide-react";
 
 export const Route = createFileRoute("/reports")({
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/reports")({
 });
 
 function ReportsPage() {
-  const { data, isLoading, error } = useDashboardData();
+  const { data, isLoading, error } = useDashboardDataFull();
 
   return (
     <AppShell>

@@ -12,7 +12,9 @@ import { buildChartSeries, formatDate, type DashboardData } from "@/lib/dashboar
 
 export function CentralBehaviorChart({ data }: { data: DashboardData }) {
   const series = buildChartSeries(data);
-  const analyzedDate = formatDate(data.overview.periodo_fim);
+  const startDate = formatDate(data.overview.periodo_inicio);
+  const endDate = formatDate(data.overview.periodo_fim);
+  const analyzedDate = startDate !== endDate && startDate !== "—" ? `${startDate} a ${endDate}` : endDate;
 
   return (
     <div className="glass-card rounded-2xl p-5">

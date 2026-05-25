@@ -199,6 +199,164 @@ function normalize(payload: unknown): DashboardData {
   };
 }
 
+function dateKey(value?: string | null) {
+  return value?.split("T")[0] || null;
+}
+
+function asNumber(value: unknown, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function sumValues<T>(arr: T[], selector: (item: T) => unknown) {
+  return arr.reduce((acc, item) => acc + asNumber(selector(item)), 0);
+}
+
+function avgValues<T>(arr: T[], selector: (item: T) => unknown) {
+  const values = arr.map(selector).map((v) => Number(v)).filter((v) => Number.isFinite(v));
+  if (!values.length) return null;
+  return values.reduce((acc, v) => acc + v, 0) / values.length;
+}
+
+function safeRatio(a: number, b: number) {
+  return b > 0 ? a / b : null;
+}
+
+function roundValue(value: number | null | undefined, decimals = 2) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  return Number(value.toFixed(decimals));
+}
+
+function buildDailyChillers(points: DashboardPoint[], totalKwh: number, intervalHours: number): DashboardChiller[] {
+  const byId = new Map<string, Record<string, unknown>[]>();
+
+  for (const point of points) {
+    const chillers = Array.isArray(point.chillers) ? point.chillers : [];
+    for (const raw of chillers) {
+      if (!raw || typeof raw !== "object") continue;
+      const c = raw as Record<string, unknown>;
+      const id = String(c.id || c.name || "UR");
+      if (!byId.has(id)) byId.set(id, []);
+      byId.get(id)!.push(c);
+    }
+  }
+
+  return Array.from(byId.entries()).map(([id, registros]) => {
+    const last = registros[registros.length - 1] ?? {};
+    const kwh = sumValues(registros, (r) => r.kwh);
+    const trh = sumValues(registros, (r) => r.trh);
+    const kwtr = safeRatio(kwh, trh);
+    const cop = kwtr ? 3.516 / kwtr : null;
+    const horas = registros.filter((r) => Boolean(r.online) || r.status === "Online").length * intervalHours;
+    const capMedia = avgValues(registros.filter((r) => Boolean(r.online) && asNumber(r.cap_pct) > 0), (r) => r.cap_pct);
+    const deltaT = avgValues(registros.filter((r) => Boolean(r.validThermal)), (r) => r.deltaT_evap);
+
+    return {
+      id,
+      name: String(last.name || id),
+      status: String(last.status || (last.online ? "Online" : "Standby")),
+      online: Boolean(last.online) || last.status === "Online",
+      kwh: roundValue(kwh, 2),
+      trh: roundValue(trh, 2),
+      kwtr: roundValue(kwtr, 3),
+      cop: roundValue(cop, 2),
+      horas_operacao: roundValue(horas, 2),
+      participacao_consumo: totalKwh > 0 ? roundValue((kwh / totalKwh) * 100, 2) : 0,
+      cap_media: roundValue(capMedia, 0),
+      deltaT_evap_medio: roundValue(deltaT, 2),
+      kw_atual: roundValue(asNumber(last.kw), 2),
+      tr_atual: roundValue(asNumber(last.tr), 2),
+      cap_atual: roundValue(asNumber(last.cap_pct), 0),
+    };
+  });
+}
+
+function scopeDashboardDataToAnalyzedDate(data: DashboardData): DashboardData {
+  const allPoints = Array.isArray(data.analytics?.series_15min) ? data.analytics.series_15min : [];
+  const selectedDate = dateKey(data.overview?.periodo_fim) || dateKey(allPoints.at(-1)?.timestamp);
+
+  if (!selectedDate || !allPoints.length) return data;
+
+  const points = allPoints.filter((point) => dateKey(point.timestamp) === selectedDate);
+  if (!points.length || points.length === allPoints.length) return data;
+
+  const intervalHours = asNumber(data.settings?.intervalo_horas, 0.25);
+  const metaKwtr = asNumber(data.overview.kwtr_meta ?? data.settings?.meta_kwtr, 0.88);
+  const carbonFactor = asNumber(data.esg?.fator_carbono_kgco2_kwh ?? data.settings?.fator_carbono_kgco2_kwh, 0.0385);
+  const area = asNumber(data.settings?.area_climatizada_m2, 0);
+
+  const totalKwh = sumValues(points, (p) => p.kwh_total);
+  const totalTrh = sumValues(points, (p) => p.trh_total);
+  const kwtr = safeRatio(totalKwh, totalTrh);
+  const cop = kwtr ? 3.516 / kwtr : null;
+  const desvio = kwtr && metaKwtr > 0 ? ((kwtr - metaKwtr) / metaKwtr) * 100 : null;
+  const picoPoint = points.reduce<DashboardPoint | null>((max, point) => {
+    const kw = asNumber(point.kw_total);
+    if (!max || kw > asNumber(max.kw_total)) return point;
+    return max;
+  }, null);
+  const picoKw = asNumber(picoPoint?.kw_total, 0);
+  const carbonoKg = totalKwh * carbonFactor;
+  const carbonoTon = carbonoKg / 1000;
+
+  const overview: DashboardData["overview"] = {
+    ...data.overview,
+    periodo_inicio: points[0]?.timestamp ?? data.overview.periodo_inicio,
+    periodo_fim: points.at(-1)?.timestamp ?? data.overview.periodo_fim,
+    kwh_total: roundValue(totalKwh, 2),
+    trh_total: roundValue(totalTrh, 2),
+    kwtr_medio: roundValue(kwtr, 3),
+    kwtr_meta: metaKwtr,
+    desvio_meta_kwtr: roundValue(desvio, 2),
+    cop_medio: roundValue(cop, 2),
+    pico_kw: roundValue(picoKw, 2),
+    hora_pico: picoPoint?.timestamp ?? null,
+    carbono_kg: roundValue(carbonoKg, 3),
+    carbono_ton: roundValue(carbonoTon, 6),
+    kwh_m2: area > 0 ? roundValue(totalKwh / area, 6) : null,
+    trh_m2: area > 0 ? roundValue(totalTrh / area, 6) : null,
+    kw_pico_m2: area > 0 ? roundValue(picoKw / area, 6) : null,
+    deltaT_evap_medio: roundValue(avgValues(points.filter((p) => asNumber(p.tr_total) > 0), (p) => p.deltaT_evap_medio), 2),
+    deltaT_cond_medio: roundValue(avgValues(points.filter((p) => asNumber(p.tr_total) > 0), (p) => p.deltaT_cond_medio), 2),
+    oat_medio: roundValue(avgValues(points, (p) => p.oat), 2),
+    vazao_media: roundValue(avgValues(points, (p) => p.vazao), 2),
+  };
+
+  const chillers = buildDailyChillers(points, totalKwh, intervalHours);
+
+  return {
+    ...data,
+    overview,
+    chillers,
+    analytics: { series_15min: points },
+    esg: {
+      ...(data.esg ?? {}),
+      fator_carbono_kgco2_kwh: carbonFactor,
+      carbono_kg: overview.carbono_kg,
+      carbono_ton: overview.carbono_ton,
+      kwh_total: overview.kwh_total,
+      kwtr_medio: overview.kwtr_medio,
+      desvio_meta_kwtr: overview.desvio_meta_kwtr,
+    },
+    reports: {
+      ...(data.reports ?? {}),
+      resumo: {
+        ...(data.reports?.resumo ?? {}),
+        consumo_total_kwh: overview.kwh_total,
+        carga_total_trh: overview.trh_total,
+        eficiencia_media_kwtr: overview.kwtr_medio,
+        meta_kwtr: overview.kwtr_meta,
+        desvio_meta_percentual: overview.desvio_meta_kwtr,
+        pico_kw: overview.pico_kw,
+        hora_pico: overview.hora_pico,
+        carbono_ton: overview.carbono_ton,
+      },
+      // Insights vindos do n8n podem representar o CSV inteiro. O frontend recalcula os insights principais do dia.
+      insights: [],
+    },
+  };
+}
+
 async function readResponsePayload(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text.trim()) return null;
@@ -228,7 +386,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
     }
 
-    const data = normalize(payload);
+    const data = scopeDashboardDataToAnalyzedDate(normalize(payload));
 
     if (!data.overview || Object.keys(data.overview).length === 0) {
       throw new Error(`Resposta sem overview em ${url}`);
@@ -245,6 +403,54 @@ export async function getDashboardData(): Promise<DashboardData> {
     if (DASHBOARD_DATA_URL !== N8N_DASHBOARD_DATA_URL) {
       try {
         return await fetchAndNormalize(N8N_DASHBOARD_DATA_URL);
+      } catch (directError) {
+        throw new Error(
+          `Não foi possível carregar dados reais. Proxy: ${(proxyError as Error).message}. Direto n8n: ${(directError as Error).message}`,
+        );
+      }
+    }
+
+    throw proxyError;
+  }
+}
+
+async function fetchDashboardPayload(url: string): Promise<unknown> {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { accept: "application/json,text/plain,*/*" },
+    cache: "no-store",
+  });
+
+  const payload = await readResponsePayload(response);
+
+  if (!response.ok) {
+    throw new Error(`Falha ao buscar dashboard em ${url}: ${response.status}`);
+  }
+
+  if (payload && typeof payload === "object" && "error" in (payload as Record<string, unknown>)) {
+    throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
+  }
+
+  return payload;
+}
+
+export async function getDashboardDataFull(): Promise<DashboardData> {
+  async function fetchAndNormalizeFull(url: string): Promise<DashboardData> {
+    const data = normalize(await fetchDashboardPayload(url));
+
+    if (!data.overview || Object.keys(data.overview).length === 0) {
+      throw new Error(`Resposta sem overview em ${url}`);
+    }
+
+    return data;
+  }
+
+  try {
+    return await fetchAndNormalizeFull(DASHBOARD_DATA_URL);
+  } catch (proxyError) {
+    if (DASHBOARD_DATA_URL !== N8N_DASHBOARD_DATA_URL) {
+      try {
+        return await fetchAndNormalizeFull(N8N_DASHBOARD_DATA_URL);
       } catch (directError) {
         throw new Error(
           `Não foi possível carregar dados reais. Proxy: ${(proxyError as Error).message}. Direto n8n: ${(directError as Error).message}`,
@@ -280,8 +486,18 @@ export async function postDashboardCsv(file: File): Promise<unknown> {
 
 export function useDashboardData() {
   return useQuery({
-    queryKey: ["dashboard-data", DASHBOARD_DATA_URL],
+    queryKey: ["dashboard-data", "daily", DASHBOARD_DATA_URL],
     queryFn: getDashboardData,
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useDashboardDataFull() {
+  return useQuery({
+    queryKey: ["dashboard-data", "full-period", DASHBOARD_DATA_URL],
+    queryFn: getDashboardDataFull,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 60 * 1000,
     retry: 1,
@@ -327,24 +543,34 @@ function positiveOrNull(value: unknown) {
 
 export function buildChartSeries(data: DashboardData) {
   let cumulative = 0;
+  const rawSeries = data.analytics.series_15min ?? [];
+  const operationalSeries = rawSeries.filter((p) => {
+    const kw = Number(p.kw_total ?? 0);
+    const tr = Number(p.tr_total ?? 0);
+    return (Number.isFinite(kw) && kw > 0) || (Number.isFinite(tr) && tr > 0);
+  });
 
-  return data.analytics.series_15min.map((p) => {
+  const dates = new Set(operationalSeries.map((p) => dateKey(p.timestamp)).filter(Boolean));
+  const isMultiDay = dates.size > 1;
+
+  return operationalSeries.map((p) => {
     const kw = positiveOrNull(p.kw_total);
     const tr = positiveOrNull(p.tr_total);
-    const hasOperation = kw !== null && tr !== null;
+    const hasAnyOperation = kw !== null || tr !== null;
+    const hasCompleteOperation = kw !== null && tr !== null;
 
     cumulative += Number(p.kwh_total ?? 0);
 
     return {
-      label: chartLabel(p.timestamp),
+      label: isMultiDay ? chartLabel(p.timestamp) : pointTime(p.timestamp),
       time: pointTime(p.timestamp),
       timestamp: p.timestamp,
-      // Valores zerados viram null para quebrar a linha, não para desenhar queda falsa até zero.
+      // Pontos sem operação são removidos da série para evitar espaços vazios no gráfico.
       kW: kw,
       trh: tr,
-      kwPerTr: hasOperation ? positiveOrNull(p.kwtr_real) : null,
-      deltaT: hasOperation ? positiveOrNull(p.deltaT_evap_medio) : null,
-      extTemp: positiveOrNull(p.oat),
+      kwPerTr: hasCompleteOperation ? positiveOrNull(p.kwtr_real) : null,
+      deltaT: hasCompleteOperation ? positiveOrNull(p.deltaT_evap_medio) : null,
+      extTemp: hasAnyOperation ? positiveOrNull(p.oat) : null,
       cumulative: Number(cumulative.toFixed(2)),
     };
   });

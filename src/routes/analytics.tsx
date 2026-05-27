@@ -219,17 +219,20 @@ function buildRadar(data: DashboardData, series: AnalyticPoint[]) {
   const deltaTIdeal = asNumber(data.settings?.deltaT_evap_ideal, 5.5);
   const cap = avg(series.map((p) => p.capAvg));
   const cop = maybeNumber(data.overview.cop_medio);
-  const stabilityBase = series.map((p) => p.kwtr).filter((v): v is number => Number.isFinite(Number(v)));
-  const stability = stabilityBase.length > 1
-    ? Math.max(0, 100 - (Math.max(...stabilityBase) - Math.min(...stabilityBase)) * 28)
-    : 72;
+  const validLoadPoints = series
+    .map((p) => p.capAvg)
+    .filter((v): v is number => Number.isFinite(Number(v)) && Number(v) > 0);
+
+  const idealRangeScore = validLoadPoints.length
+    ? (validLoadPoints.filter((v) => v >= 55 && v <= 85).length / validLoadPoints.length) * 100
+    : 0;
 
   return [
     { metric: "Eficiência", score: kwtr && meta ? Math.max(0, Math.min(100, 100 - ((kwtr - meta) / meta) * 100)) : 70 },
     { metric: "COP", score: cop ? Math.max(0, Math.min(100, (cop / 5) * 100)) : 70 },
     { metric: "Delta-T", score: deltaT ? Math.max(0, Math.min(100, (deltaT / deltaTIdeal) * 100)) : 70 },
     { metric: "Carga", score: cap ? Math.max(0, Math.min(100, 100 - Math.abs(cap - 70) * 1.35)) : 65 },
-    { metric: "Estabilidade", score: stability },
+    { metric: "Faixa ideal", score: Math.max(0, Math.min(100, idealRangeScore)) },
   ];
 }
 

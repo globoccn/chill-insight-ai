@@ -285,10 +285,8 @@ function EsgIntelligenceCard({ data, trees, intensity, avoidedKg }: { data: Dash
     },
     {
       icon: <TreeDeciduous className="h-4 w-4" />,
-      title: "Equivalência climática",
-      text: avoidedKg && avoidedKg > 0
-        ? `A economia frente ao baseline representa cerca de ${formatNumber(trees, 0)} árvores/ano em CO₂ evitado.`
-        : `A pegada estimada do período exigiria cerca de ${formatNumber(trees, 0)} árvores/ano para neutralização ilustrativa.`,
+      title: "Equivalência ambiental",
+      text: `Estimativa de ${formatNumber(trees, 0)} árvores necessárias para absorver o CO₂ emitido no período analisado. Base ilustrativa: ${TREE_KG_CO2_YEAR} kgCO₂e/árvore/ano.`,
       tone: "text-esg",
     },
     {
@@ -339,10 +337,10 @@ function ImpactEquivalences({ data, trees, avoidedKg, intensity }: { data: Dashb
   const carbonM2 = area > 0 ? (asNumber(data.overview.carbono_kg, 0) / area) : null;
 
   const items = [
-    { label: avoidedKg && avoidedKg > 0 ? "Árvores equivalentes evitadas" : "Árvores p/ neutralizar", value: formatNumber(trees, 0), unit: "árv/ano", icon: <TreeDeciduous className="h-4 w-4" />, color: "text-efficiency" },
-    { label: "Intensidade carbono", value: formatNumber(intensity, 3), unit: "kgCO₂e/TRh", icon: <Cloud className="h-4 w-4" />, color: "text-esg" },
-    { label: "Carbono por área", value: formatNumber(carbonM2, 4), unit: "kgCO₂e/m²", icon: <Sprout className="h-4 w-4" />, color: "text-carbon" },
-    { label: "Progresso meta mensal", value: progress === null ? "—" : formatNumber(progress, 1), unit: progress === null ? "" : "%", icon: <Target className="h-4 w-4" />, color: "text-water" },
+    { label: "Equivalência ambiental", value: formatNumber(trees, 0), unit: "árvores", icon: <TreeDeciduous className="h-4 w-4" />, color: "text-efficiency", note: `Absorção estimada do CO₂ emitido · ${TREE_KG_CO2_YEAR} kgCO₂e/árvore/ano` },
+    { label: "Intensidade carbono", value: formatNumber(intensity, 3), unit: "kgCO₂e/TRh", icon: <Cloud className="h-4 w-4" />, color: "text-esg", note: null },
+    { label: "Carbono por área", value: formatNumber(carbonM2, 4), unit: "kgCO₂e/m²", icon: <Sprout className="h-4 w-4" />, color: "text-carbon", note: null },
+    { label: "Progresso meta mensal", value: progress === null ? "—" : formatNumber(progress, 1), unit: progress === null ? "" : "%", icon: <Target className="h-4 w-4" />, color: "text-water", note: null },
   ];
 
   return (
@@ -359,10 +357,11 @@ function ImpactEquivalences({ data, trees, avoidedKg, intensity }: { data: Dashb
               <span className="text-2xl font-semibold tracking-tight tabular-nums">{item.value}</span>
               <span className="text-[11px] text-muted-foreground">{item.unit}</span>
             </div>
+            {item.note ? <p className="mt-2 text-[10px] leading-snug text-muted-foreground">{item.note}</p> : null}
           </div>
         ))}
       </div>
-      <div className="mt-3 text-[11px] text-muted-foreground">Equivalência de árvores usa fator ilustrativo de {TREE_KG_CO2_YEAR} kgCO₂e/árvore/ano. Ajustável futuramente em Settings.</div>
+      <div className="mt-3 text-[11px] text-muted-foreground">A equivalência ambiental é ilustrativa: estima a quantidade de árvores necessárias para absorver o CO₂ emitido no período, usando {TREE_KG_CO2_YEAR} kgCO₂e/árvore/ano.</div>
     </div>
   );
 }
@@ -412,7 +411,7 @@ function EsgPage() {
           <EsgMetricCard label="Energia consumida" value={formatNumber(o.kwh_total)} unit="kWh" icon={<Zap className="h-4 w-4" />} color="water" points={energyTrend} dod={comp.energy?.vs_previous_day_percent ?? 0} d7={comp.energy?.vs_7d_avg_percent ?? 0} goodWhen="down" helper="Base operacional do carbono" />
           <EsgMetricCard label="Intensidade carbono" value={formatNumber(intensity, 3)} unit="kg/TRh" icon={<Gauge className="h-4 w-4" />} color="esg" points={intensityTrend} dod={0} d7={0} goodWhen="down" helper="kgCO₂e por TRh produzido" />
           <EsgMetricCard label="Eficiência ESG" value={formatNumber(o.kwtr_medio, 3)} unit="kW/TR" icon={<Leaf className="h-4 w-4" />} color="efficiency" points={effTrend} dod={comp.eff?.vs_previous_day_percent ?? 0} d7={comp.eff?.vs_7d_avg_percent ?? 0} goodWhen="down" helper={`Meta: ${formatNumber(o.kwtr_meta, 2)} kW/TR`} />
-          <EsgMetricCard label="Árvores equivalentes" value={formatNumber(trees, 0)} unit="árv/ano" icon={<TreeDeciduous className="h-4 w-4" />} color="efficiency" points={treeTrend} dod={comp.carbon?.vs_previous_day_percent ?? 0} d7={comp.carbon?.vs_7d_avg_percent ?? 0} goodWhen="down" helper={avoidedKg && avoidedKg > 0 ? "CO₂ evitado vs baseline" : "neutralização ilustrativa"} />
+          <EsgMetricCard label="Equivalência ambiental" value={formatNumber(trees, 0)} unit="árvores" icon={<TreeDeciduous className="h-4 w-4" />} color="efficiency" points={treeTrend} dod={comp.carbon?.vs_previous_day_percent ?? 0} d7={comp.carbon?.vs_7d_avg_percent ?? 0} goodWhen="down" helper="Absorção estimada do CO₂ emitido" />
           <EsgMetricCard label="ESG Score" value={formatNumber(esgScore)} unit="/100" icon={<Target className="h-4 w-4" />} color="esg" points={effTrend} dod={-deviation} d7={comp.eff?.vs_7d_avg_percent ? -comp.eff.vs_7d_avg_percent : 0} goodWhen="up" helper={deviation <= 0 ? "Operação dentro da meta" : "Atenção à eficiência"} />
         </div>
 

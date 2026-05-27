@@ -165,7 +165,7 @@ export function HealthScoreCard({ data }: { data: DashboardData }) {
     { label: "Eficiência", value: baseScore, status: scoreStatus(baseScore) },
     { label: "Carbono", value: carbonScore, status: metaCo2Periodo ? scoreStatus(carbonScore) : "Sem meta" },
     { label: "Operação", value: operationScore, status: data.chillers.length ? `${onlineCount}/${data.chillers.length} online` : "Sem dados" },
-    { label: "Estabilidade", value: stabilityScore, status: receivedPoints ? `${receivedPoints}/${expectedPoints} pontos` : "Sem dados" },
+    { label: "Cobertura", value: stabilityScore, status: receivedPoints ? `${receivedPoints}/${expectedPoints} pontos` : "Sem dados" },
   ];
 
   return (

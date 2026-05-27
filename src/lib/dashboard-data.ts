@@ -607,7 +607,7 @@ async function readResponsePayload(response: Response): Promise<unknown> {
   }
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
+export async function getDashboardDataForPeriod(period: DashboardPeriod = getDashboardPeriod()): Promise<DashboardData> {
   async function fetchAndNormalize(url: string): Promise<DashboardData> {
     const response = await fetch(url, {
       method: "GET",
@@ -625,7 +625,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
     }
 
-    const data = scopeDashboardData(normalize(payload), getDashboardPeriod());
+    const data = scopeDashboardData(normalize(payload), period);
 
     if (!data.overview || Object.keys(data.overview).length === 0) {
       throw new Error(`Resposta sem overview em ${url}`);
@@ -671,6 +671,10 @@ async function fetchDashboardPayload(url: string): Promise<unknown> {
   }
 
   return payload;
+}
+
+export async function getDashboardData(): Promise<DashboardData> {
+  return getDashboardDataForPeriod(getDashboardPeriod());
 }
 
 export async function getDashboardDataFull(): Promise<DashboardData> {
@@ -727,7 +731,7 @@ export function useDashboardData() {
   const period = useDashboardPeriod();
   return useQuery({
     queryKey: ["dashboard-data", period, DASHBOARD_DATA_URL],
-    queryFn: getDashboardData,
+    queryFn: () => getDashboardDataForPeriod(period),
     refetchInterval: 5 * 60 * 1000,
     staleTime: 60 * 1000,
     retry: 1,

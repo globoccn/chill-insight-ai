@@ -663,9 +663,8 @@ function AnalyticsPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-12">
-          <div className="xl:col-span-5"><OperationalHeatmap data={heatmap} meta={meta} /></div>
-          <div className="xl:col-span-3"><RadarPanel data={data} series={series} /></div>
-          <div className="xl:col-span-4"><TimelinePanel series={series} /></div>
+          <div className="xl:col-span-6"><OperationalHeatmap data={heatmap} meta={meta} /></div>
+          <div className="xl:col-span-6"><TimelinePanel series={series} /></div>
         </div>
       </div>
     </AppShell>

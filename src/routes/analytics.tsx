@@ -500,25 +500,80 @@ function DiagnosticsPanel({ data, series }: { data: DashboardData; series: Analy
 }
 
 function RadarPanel({ data, series }: { data: DashboardData; series: AnalyticPoint[] }) {
-  const rows = buildRadar(data, series);
+  const meta = asNumber(data.overview.kwtr_meta ?? data.settings?.meta_kwtr, 0.88);
+  const kwtr = asNumber(data.overview.kwtr_medio, meta);
+  const cop = asNumber(data.overview.cop_medio, 0);
+  const delta = asNumber(data.overview.delta_t_medio, 0);
+  const idealLoadPoints = series.filter((p) => p.capAvg !== null && p.capAvg >= 55 && p.capAvg <= 85).length;
+  const idealLoadPct = series.length ? (idealLoadPoints / series.length) * 100 : 0;
+
+  const metrics = [
+    {
+      label: "Eficiência energética",
+      value: `${formatNumber(kwtr, 3)} kW/TR`,
+      score: Math.max(0, Math.min(100, (meta / Math.max(kwtr, 0.01)) * 100)),
+      description: kwtr <= meta ? "Operação dentro da meta" : "Acima da meta operacional",
+      tone: "var(--color-efficiency)",
+    },
+    {
+      label: "COP operacional",
+      value: formatNumber(cop, 2),
+      score: Math.max(0, Math.min(100, (cop / 5.5) * 100)),
+      description: cop >= 4 ? "Performance térmica elevada" : "Eficiência térmica moderada",
+      tone: "var(--color-water)",
+    },
+    {
+      label: "Delta-T evaporador",
+      value: `${formatNumber(delta, 1)}°C`,
+      score: Math.max(0, Math.min(100, 100 - Math.abs(delta - 5.5) * 12)),
+      description: "Proximidade da faixa ideal",
+      tone: "var(--color-carbon)",
+    },
+    {
+      label: "Faixa ideal",
+      value: `${formatNumber(idealLoadPct, 0)}%`,
+      score: idealLoadPct,
+      description: "Tempo em carga operacional eficiente",
+      tone: "var(--color-warning)",
+    },
+  ];
+
   return (
     <div className="control-card chart-panel rounded-2xl p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Performance radar</div>
-          <h3 className="mt-1 text-lg font-semibold tracking-tight">Perfil analítico da operação</h3>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Operational health</div>
+          <h3 className="mt-1 text-lg font-semibold tracking-tight">Saúde operacional da planta</h3>
         </div>
         <RadarIcon className="h-5 w-5 text-carbon" />
       </div>
-      <div className="chart-stage h-[260px] rounded-xl p-2">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={rows} outerRadius="74%">
-            <PolarGrid stroke="var(--chart-grid)" />
-            <PolarAngleAxis dataKey="metric" tick={{ fill: "var(--chart-axis)", fontSize: 11 }} />
-            <Radar name="Score" dataKey="score" stroke="var(--color-efficiency)" fill="var(--color-efficiency)" fillOpacity={0.32} strokeWidth={2.1} />
-            <Tooltip content={<PremiumTooltip />} />
-          </RadarChart>
-        </ResponsiveContainer>
+
+      <div className="space-y-4">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-xl border border-border/70 bg-foreground/[0.025] p-3 dark:bg-white/[0.025]">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold tracking-tight">{metric.label}</div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">{metric.description}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-base font-bold tabular-nums">{metric.value}</div>
+                <div className="text-[11px] text-muted-foreground">{formatNumber(metric.score, 0)}%</div>
+              </div>
+            </div>
+
+            <div className="relative h-2.5 overflow-hidden rounded-full bg-white/5 dark:bg-white/10">
+              <div
+                className="absolute inset-y-0 left-0 rounded-full"
+                style={{
+                  width: `${metric.score}%`,
+                  background: `linear-gradient(90deg, ${metric.tone}99, ${metric.tone})`,
+                  boxShadow: `0 0 18px ${metric.tone}55`,
+                }}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

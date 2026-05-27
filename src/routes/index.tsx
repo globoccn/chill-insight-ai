@@ -12,7 +12,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Overview — Building ESG Performance" },
-      { name: "description", content: "Dashboard executiva ESG e eficiência energética da Central de Água Gelada — dados consolidados do n8n." },
+      { name: "description", content: "Dashboard executiva ESG e eficiência energética da Central de Água Gelada." },
     ],
   }),
   component: Overview,
@@ -36,8 +36,8 @@ function Overview() {
 
   return (
     <AppShell>
-      {isLoading && <div className="control-card rounded-2xl p-4 text-sm text-muted-foreground">Carregando dados do n8n...</div>}
-      {error && <div className="control-card rounded-2xl p-4 text-sm text-warning">Não foi possível carregar os dados reais. O dashboard tentou {DASHBOARD_DATA_URL}; verifique se o workflow GET /dashboard-data está ativo e se o Redis tem cag:dashboard:latest.</div>}
+      {isLoading && <div className="control-card rounded-2xl p-4 text-sm text-muted-foreground">Carregando dados...</div>}
+      {error && <div className="control-card rounded-2xl p-4 text-sm text-warning">Não foi possível carregar os dados reais. O dashboard tentou {DASHBOARD_DATA_URL}; verifique se o serviço de dados está ativo e se há dados consolidados disponíveis.</div>}
 
       {data && (
         <div className="space-y-3.5">

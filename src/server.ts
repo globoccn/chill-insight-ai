@@ -109,7 +109,7 @@ async function postSettingsToN8n(request: Request, env: unknown): Promise<Respon
     return new Response(
       JSON.stringify({
         error: true,
-        message: "n8n recusou o POST /dashboard-settings",
+        message: "serviço de dados recusou o POST /dashboard-settings",
         status: saveResponse.status,
         detail: saveText,
         sent: normalized,
@@ -134,10 +134,10 @@ async function postSettingsToN8n(request: Request, env: unknown): Promise<Respon
   return new Response(
     JSON.stringify({
       success: true,
-      source: "n8n",
+      source: "service",
       saved: normalized,
       persisted,
-      n8nResponse: saveText ? (() => { try { return JSON.parse(saveText); } catch { return saveText; } })() : null,
+      serviceResponse: saveText ? (() => { try { return JSON.parse(saveText); } catch { return saveText; } })() : null,
     }),
     { status: 200, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
   );
@@ -159,7 +159,7 @@ async function proxyToN8n(request: Request, env: unknown, path: string, method?:
   const finalMethod = method ?? request.method;
   const hasBody = !["GET", "HEAD"].includes(finalMethod.toUpperCase());
 
-  // Não repassamos todos os headers do browser para o n8n.
+  // Não repassamos todos os headers do browser para o serviço de dados.
   // Host/content-length/encoding podem quebrar POST em alguns runtimes.
   const headers = new Headers();
   const contentType = request.headers.get("content-type");
@@ -188,7 +188,7 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
     });
   }
 
-  // Dados consolidados já gravados pelo n8n no Redis: cag:dashboard:latest.
+  // Dados consolidados já gravados pelo serviço de dados: cag:dashboard:latest.
   return proxyToN8n(request, env, "dashboard-data", "GET");
 }
 
@@ -201,7 +201,7 @@ async function handleSettingsRequest(request: Request, env: unknown): Promise<Re
     });
   }
 
-  // Settings são salvas/lidas pelo n8n em cag:settings.
+  // Settings são salvas/lidas em cag:settings.
   // POST recebe tratamento explícito para garantir payload JSON limpo e validar persistência.
   if (request.method === "POST") return postSettingsToN8n(request, env);
   return proxyToN8n(request, env, "dashboard-settings", "GET");

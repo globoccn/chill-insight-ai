@@ -13,7 +13,7 @@ export const N8N_SETTINGS_URL = `${n8nBaseUrl}/dashboard-settings`;
 export const N8N_UPLOAD_WEBHOOK_URL = `${n8nBaseUrl}/dados-globo-vm22`;
 
 // Padrão correto em produção: o browser chama o backend do próprio dashboard.
-// O server.ts então faz proxy para o n8n. Isso evita bloqueio de CORS.
+// O server.ts então faz proxy para o serviço de dados. Isso evita bloqueio de CORS.
 export const DASHBOARD_DATA_URL = import.meta.env.VITE_DASHBOARD_DATA_URL || "/api/dashboard";
 export const SETTINGS_URL = import.meta.env.VITE_SETTINGS_URL || "/api/settings";
 export const UPLOAD_URL = import.meta.env.VITE_UPLOAD_URL || "/api/dashboard/upload";
@@ -72,6 +72,9 @@ export interface DashboardData {
     hora_pico?: string | null;
     carbono_kg?: number | null;
     carbono_ton?: number | null;
+    custo_total?: number | null;
+    economia_vs_baseline_kwh?: number | null;
+    economia_vs_baseline_percent?: number | null;
     kwh_m2?: number | null;
     trh_m2?: number | null;
     kw_pico_m2?: number | null;
@@ -177,7 +180,7 @@ function parseMaybeJson(value: unknown): unknown {
 function unwrapDashboardPayload(payload: unknown): unknown {
   let current = parseMaybeJson(payload);
 
-  // n8n às vezes retorna: [{ json: {...} }], [{ value: "{...}" }] ou [{ data: {...} }]
+  // O serviço de dados às vezes retorna: [{ json: {...} }], [{ value: "{...}" }] ou [{ data: {...} }]
   if (Array.isArray(current)) {
     current = current[0] ?? null;
   }
@@ -224,7 +227,7 @@ function parseDateLike(value?: string | null) {
   const native = new Date(text);
   if (!Number.isNaN(native.getTime())) return native;
 
-  // Aceita formatos comuns vindos do n8n/CSV, como "24/05/2026, 23:45" ou "24/05/2026 23:45".
+  // Aceita formatos comuns vindos do serviço de dados/CSV, como "24/05/2026, 23:45" ou "24/05/2026 23:45".
   const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2}))?/);
   if (match) {
     const [, dd, mm, yyyy, hh = "00", mi = "00"] = match;
@@ -622,7 +625,7 @@ export async function getDashboardDataForPeriod(period: DashboardPeriod = getDas
     }
 
     if (payload && typeof payload === "object" && "error" in (payload as Record<string, unknown>)) {
-      throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
+      throw new Error(String((payload as { message?: unknown }).message || "serviço de dados retornou erro"));
     }
 
     const data = scopeDashboardData(normalize(payload), period);
@@ -644,7 +647,7 @@ export async function getDashboardDataForPeriod(period: DashboardPeriod = getDas
         return await fetchAndNormalize(N8N_DASHBOARD_DATA_URL);
       } catch (directError) {
         throw new Error(
-          `Não foi possível carregar dados reais. Proxy: ${(proxyError as Error).message}. Direto n8n: ${(directError as Error).message}`,
+          `Não foi possível carregar dados reais. Proxy: ${(proxyError as Error).message}. Direto serviço de dados: ${(directError as Error).message}`,
         );
       }
     }
@@ -667,7 +670,7 @@ async function fetchDashboardPayload(url: string): Promise<unknown> {
   }
 
   if (payload && typeof payload === "object" && "error" in (payload as Record<string, unknown>)) {
-    throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
+    throw new Error(String((payload as { message?: unknown }).message || "serviço de dados retornou erro"));
   }
 
   return payload;
@@ -696,7 +699,7 @@ export async function getDashboardDataFull(): Promise<DashboardData> {
         return await fetchAndNormalizeFull(N8N_DASHBOARD_DATA_URL);
       } catch (directError) {
         throw new Error(
-          `Não foi possível carregar dados reais. Proxy: ${(proxyError as Error).message}. Direto n8n: ${(directError as Error).message}`,
+          `Não foi possível carregar dados reais. Proxy: ${(proxyError as Error).message}. Direto serviço de dados: ${(directError as Error).message}`,
         );
       }
     }
@@ -780,7 +783,7 @@ export function buildKpis(data: DashboardData): DashboardKpi[] {
     { key: "deltaT", label: "Delta-T médio", value: formatNumber(o.deltaT_evap_medio, 2), unit: "°C", ...withComp("deltaT"), goodWhen: "up", color: "water", sparkline: trend(data, "deltaT", s, "deltaT_evap_medio") },
     { key: "peak", label: "Pico de demanda", value: formatNumber(o.pico_kw), unit: "kW", ...withComp("peak"), goodWhen: "down", color: "warning", sparkline: trend(data, "peak", s, "kw_total"), extra: `Hora pico: ${formatDateTime(o.hora_pico)}` },
     { key: "hours", label: "Horas operação", value: formatNumber(totalHours, 1), unit: "h", ...withComp("hours"), goodWhen: "up", color: "warning", sparkline: trend(data, "hours") },
-    { key: "baseline", label: "Economia vs baseline", value: formatNumber(o.desvio_meta_kwtr, 2), unit: "%", dod: Number(o.desvio_meta_kwtr ?? 0), d7: 0, goodWhen: "down", color: "efficiency", sparkline: trend(data, "baseline"), extra: "Meta configurável" },
+    { key: "baseline", label: "Economia vs baseline", value: formatNumber(o.economia_vs_baseline_percent, 2), unit: "%", dod: Number(o.economia_vs_baseline_percent ?? 0), d7: 0, goodWhen: "up", color: "efficiency", sparkline: trend(data, "baseline"), extra: "Baseline energético" },
   ];
 }
 

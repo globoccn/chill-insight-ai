@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageTitle } from "@/components/layout/PageTitle";
-import { DASHBOARD_DATA_URL, N8N_API_BASE_URL, N8N_UPLOAD_WEBHOOK_URL } from "@/lib/dashboard-data";
 import {
   areSettingsEquivalent,
   DashboardSettings,
@@ -130,16 +129,6 @@ function NumericField({
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <label className="block md:col-span-2">
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1.5 overflow-hidden rounded-xl border border-border bg-muted/30 px-3.5 py-2.5 text-xs text-muted-foreground">
-        <code className="break-all">{value}</code>
-      </div>
-    </label>
-  );
-}
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -192,15 +181,15 @@ function SettingsPage() {
 
     if (persisted && !areSettingsEquivalent(saved, persisted)) {
       setSavedMessage(
-        `Settings enviadas, mas a leitura imediata do Redis ainda retornou outro valor. Mantive o valor salvo na tela. Verifique o workflow POST /dashboard-settings: ele pode não estar gravando cag:settings com o body recebido.`,
+        `Settings enviadas, mas a confirmação imediata ainda retornou outro valor. Mantive o valor salvo na tela. Verifique se o serviço de dados está gravando cag:settings com o body recebido.`,
       );
       return;
     }
 
     setSavedMessage(
       persisted
-        ? `Settings salvas e confirmadas no Redis cag:settings via ${result.source ?? result.endpoint ?? "endpoint configurado"}. Atualizando a página...`
-        : `Settings enviadas via ${result.source ?? result.endpoint ?? "endpoint configurado"}. Atualizando a página...`,
+        ? `Settings salvas e confirmadas em cag:settings. Atualizando a página...`
+        : `Settings enviadas. Atualizando a página...`,
     );
 
     window.setTimeout(() => {
@@ -210,13 +199,13 @@ function SettingsPage() {
 
   return (
     <AppShell>
-      <PageTitle title="Settings" subtitle="Parâmetros usados pelo dashboard e pelo workflow n8n" />
+      <PageTitle title="Settings" subtitle="Parâmetros usados pelo dashboard" />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/70 p-4">
         <div>
           <div className="text-sm font-semibold">Persistência</div>
           <p className="text-xs text-muted-foreground">
-            O botão salva em <code>cag:settings</code>. O n8n deve ler essa chave antes do node de cálculos.
+            O botão salva em <code>cag:settings</code>.
           </p>
         </div>
         <button
@@ -246,15 +235,9 @@ function SettingsPage() {
         </div>
       )}
 
-      <Card title="Integração n8n">
-        <ReadOnlyField label="Endpoint interno usado pelo dashboard" value={DASHBOARD_DATA_URL} />
-        <ReadOnlyField label="Base n8n configurada" value={N8N_API_BASE_URL} />
-        <ReadOnlyField label="Webhook de upload CSV" value={N8N_UPLOAD_WEBHOOK_URL} />
-      </Card>
-
       <Card title="Carbono & Energia">
         <NumericField
-          label="Fator nacional de emissão de carbono"
+          label="Fator de emissão de carbono"
           value={settings.fator_carbono_kgco2_kwh}
           unit="kgCO₂e/kWh"
           onCommit={(value) => setNumber("fator_carbono_kgco2_kwh", value)}
@@ -362,7 +345,7 @@ function SettingsPage() {
       </Card>
 
       <div className="rounded-2xl border border-efficiency/30 bg-efficiency/10 p-4 text-sm text-efficiency">
-        As Settings são enviadas diretamente para o webhook n8n <code>/dashboard-settings</code>. Esse workflow grava/lê a chave <code>cag:settings</code> no Redis.
+        As Settings são salvas em <code>cag:settings</code> para uso pelos cálculos do dashboard.
       </div>
     </AppShell>
   );

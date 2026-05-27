@@ -129,7 +129,7 @@ export function CentralBehaviorChart({ data }: { data: DashboardData }) {
           </ResponsiveContainer>
         ) : (
           <div className="grid h-full place-items-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
-            Aguardando dados do n8n/Redis.
+            Aguardando dados operacionais.
           </div>
         )}
       </div>

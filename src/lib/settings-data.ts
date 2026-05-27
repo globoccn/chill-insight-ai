@@ -55,7 +55,7 @@ type SaveSettingsResult = {
   saved?: DashboardSettings;
   persisted?: DashboardSettings;
   endpoint?: string;
-  n8nResponse?: unknown;
+  serviceResponse?: unknown;
   persistenceConfirmed?: boolean;
   persistenceMismatch?: boolean;
 };
@@ -98,7 +98,7 @@ function unwrapSettingsPayload(value: unknown): SettingsPayload {
 
   const payload = parsed as Record<string, unknown>;
 
-  // Formatos comuns que podem vir do n8n/proxy:
+  // Formatos comuns que podem vir do serviço de dados/proxy:
   // objeto direto, { settings }, { body }, { data }, { json } ou array com um item.
   for (const key of ["settings", "body", "data", "json"] as const) {
     const nested = parseMaybeJson(payload[key]);
@@ -206,7 +206,7 @@ export async function getSettings(): Promise<DashboardSettings> {
       }
 
       if (payload && typeof payload === "object" && "error" in (payload as Record<string, unknown>)) {
-        throw new Error(String((payload as { message?: unknown }).message || "n8n retornou erro"));
+        throw new Error(String((payload as { message?: unknown }).message || "serviço de dados retornou erro"));
       }
 
       return normalizeSettings(payload);
@@ -250,12 +250,12 @@ export async function saveSettings(settings: DashboardSettings): Promise<SaveSet
         ...result,
         success: true,
         endpoint,
-        source: typeof result.source === "string" ? result.source : endpoint === N8N_SETTINGS_URL ? "n8n-direct" : "dashboard-proxy",
+        source: typeof result.source === "string" ? result.source : endpoint === N8N_SETTINGS_URL ? "service-direct" : "dashboard-proxy",
         saved,
         persisted,
         persistenceConfirmed,
         persistenceMismatch: Boolean(persisted && !persistenceConfirmed),
-        n8nResponse: result.n8nResponse,
+        serviceResponse: result.serviceResponse,
       };
     } catch (error) {
       errors.push(`${endpoint}: ${(error as Error).message}`);
@@ -284,7 +284,7 @@ export function useSaveSettings() {
       const confirmed = result.persistenceConfirmed && result.persisted ? result.persisted : saved;
 
       // Não invalida imediatamente ["dashboard-settings"].
-      // Se o n8n/Redis ainda devolver o valor antigo por alguns ms, o refetch sobrescreve a edição local
+      // Se o serviço de dados ainda devolver o valor antigo por alguns ms, o refetch sobrescreve a edição local
       // e o campo parece “voltar” para 0,88 logo após salvar.
       queryClient.setQueryData(["dashboard-settings", SETTINGS_URL, N8N_SETTINGS_URL], confirmed);
       queryClient.invalidateQueries({ queryKey: ["dashboard-data"] });

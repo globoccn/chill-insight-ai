@@ -38,6 +38,37 @@ function scoreFromValue(value?: number | null, reference?: number | null, goodWh
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+function clampScore(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function getPeriodDays(data: DashboardData) {
+  const startRaw = data.overview.periodo_inicio || data.analytics.series_15min[0]?.timestamp;
+  const endRaw = data.overview.periodo_fim || data.analytics.series_15min[data.analytics.series_15min.length - 1]?.timestamp;
+
+  const start = startRaw ? new Date(startRaw) : null;
+  const end = endRaw ? new Date(endRaw) : null;
+
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
+
+  const diffMs = Math.max(0, end.getTime() - start.getTime());
+  return Math.max(1, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
+}
+
+function getPeriodCarbonTarget(data: DashboardData) {
+  const monthlyTarget = Number(data.settings?.meta_co2_mes_ton ?? 0);
+  if (!Number.isFinite(monthlyTarget) || monthlyTarget <= 0) return null;
+
+  return (monthlyTarget / 30) * getPeriodDays(data);
+}
+
+function getExpectedPoints(data: DashboardData) {
+  const intervalHours = Number(data.settings?.intervalo_horas ?? 0.25);
+  const safeInterval = Number.isFinite(intervalHours) && intervalHours > 0 ? intervalHours : 0.25;
+  return Math.max(1, Math.round((24 / safeInterval) * getPeriodDays(data)));
+}
+
 function scoreStatus(score: number) {
   if (score >= 85) return "Muito Bom";
   if (score >= 70) return "Bom";
@@ -48,10 +79,11 @@ function scoreStatus(score: number) {
 export function PerformanceEsgCard({ data }: { data: DashboardData }) {
   const o = data.overview;
   const score = scoreFromDeviation(o.desvio_meta_kwtr);
-  const carbonScore = scoreFromValue(o.carbono_ton, Number(data.settings?.meta_co2_mes_ton ?? data.settings?.meta_co2_dia_ton ?? 1), "down");
+  const metaCo2Periodo = getPeriodCarbonTarget(data);
+  const carbonScore = scoreFromValue(o.carbono_ton, metaCo2Periodo, "down");
 
   const items = [
-    { label: "Carbono", value: formatNumber(o.carbono_ton, 3), unit: "tCO₂e", target: "Fator nacional", pct: carbonScore, color: COLORS.carbon },
+    { label: "Carbono", value: formatNumber(o.carbono_ton, 3), unit: "tCO₂e", target: metaCo2Periodo ? `Meta período: ${formatNumber(metaCo2Periodo, 3)} tCO₂e` : "Fator configurado", pct: carbonScore, color: COLORS.carbon },
     { label: "Intensidade energética", value: formatNumber(o.kwtr_medio, 3), unit: "kW/TR", target: `Meta: ≤ ${formatNumber(o.kwtr_meta, 2)}`, pct: score, color: COLORS.efficiency },
     { label: "Desvio da meta", value: formatNumber(o.desvio_meta_kwtr, 2), unit: "%", target: "Meta configurável", pct: score, color: COLORS.esg },
     { label: "COP médio", value: formatNumber(o.cop_medio, 2), unit: "", target: "Calculado por 3,516/kWTR", pct: Math.max(0, Math.min(100, Number(o.cop_medio ?? 0) * 20)), color: COLORS.efficiency },
@@ -123,16 +155,17 @@ export function HealthScoreCard({ data }: { data: DashboardData }) {
   const baseScore = scoreFromDeviation(deviation);
   const onlineCount = data.chillers.filter((c) => c.online || c.status === "Online").length;
   const operationScore = data.chillers.length ? Math.round((onlineCount / data.chillers.length) * 100) : 0;
-  const expectedDailyPoints = 96;
-  const stabilityScore = Math.min(100, Math.round((data.analytics.series_15min.length / expectedDailyPoints) * 100));
-  const carbonScore = scoreFromValue(data.overview.carbono_ton, Number(data.settings?.meta_co2_mes_ton ?? data.settings?.meta_co2_dia_ton ?? 1), "down");
+  const expectedPoints = getExpectedPoints(data);
+  const receivedPoints = data.analytics.series_15min.length;
+  const stabilityScore = clampScore((receivedPoints / expectedPoints) * 100);
+  const metaCo2Periodo = getPeriodCarbonTarget(data);
+  const carbonScore = scoreFromValue(data.overview.carbono_ton, metaCo2Periodo, "down");
 
   const healthScores = [
-    { label: "Energia", value: baseScore, status: scoreStatus(baseScore) },
     { label: "Eficiência", value: baseScore, status: scoreStatus(baseScore) },
-    { label: "Carbono", value: carbonScore, status: data.overview.carbono_ton ? "Estimado" : "Sem dados" },
+    { label: "Carbono", value: carbonScore, status: metaCo2Periodo ? scoreStatus(carbonScore) : "Sem meta" },
     { label: "Operação", value: operationScore, status: data.chillers.length ? `${onlineCount}/${data.chillers.length} online` : "Sem dados" },
-    { label: "Estabilidade", value: stabilityScore, status: data.analytics.series_15min.length ? `${data.analytics.series_15min.length} pontos` : "Sem dados" },
+    { label: "Estabilidade", value: stabilityScore, status: receivedPoints ? `${receivedPoints}/${expectedPoints} pontos` : "Sem dados" },
   ];
 
   return (
@@ -140,7 +173,7 @@ export function HealthScoreCard({ data }: { data: DashboardData }) {
       <div className="flex items-center justify-between">
         <h3 className="text-[15px] font-semibold tracking-tight">Score de saúde</h3>
       </div>
-      <div className="mt-5 grid grid-cols-5 gap-3">
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         {healthScores.map((h) => {
           const color = h.value >= 88 ? "var(--color-esg)" : h.value >= 84 ? "var(--color-efficiency)" : h.value >= 70 ? "var(--color-warning)" : "var(--color-critical)";
           return (

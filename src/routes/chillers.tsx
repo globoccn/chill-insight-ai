@@ -111,7 +111,7 @@ type ChillerPoint = {
 
 function getPointChillers(point: DashboardPoint): ChillerPoint[] {
   const timestamp = point.timestamp || "";
-  const oat = maybeNumber(point.oat);
+  const oat = maybeNumber(point.oat ?? (point as Record<string, unknown>).temp_externa);
   const raw = Array.isArray(point.chillers) ? point.chillers : [];
 
   return raw
@@ -129,9 +129,9 @@ function getPointChillers(point: DashboardPoint): ChillerPoint[] {
         trh: maybeNumber(item.trh),
         kwtr: maybeNumber(item.kwtr),
         cop: maybeNumber(item.cop),
-        cap: maybeNumber(item.cap_pct),
-        deltaT: maybeNumber(item.deltaT_evap),
-        online: Boolean(item.online) || item.status === "Online" || asNumber(item.kw) > 0 || asNumber(item.cap_pct) > 0,
+        cap: maybeNumber(item.cap_pct ?? item.capacidade_pct ?? item.cap_atual ?? item.cap_media),
+        deltaT: maybeNumber(item.deltaT_evap ?? item.delta_t_ag ?? item.deltaT_evap_medio ?? item.delta_t_medio),
+        online: Boolean(item.online) || item.status === "Online" || asNumber(item.kw) > 0 || asNumber(item.tr) > 0 || asNumber(item.cap_pct ?? item.capacidade_pct ?? item.cap_atual ?? item.cap_media) > 0,
       };
     });
 }

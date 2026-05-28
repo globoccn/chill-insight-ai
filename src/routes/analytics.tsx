@@ -239,7 +239,7 @@ function buildRadar(data: DashboardData, series: AnalyticPoint[]) {
 function buildDiagnostics(data: DashboardData, series: AnalyticPoint[]) {
   const meta = asNumber(data.overview.kwtr_meta ?? data.settings?.meta_kwtr, 0.88);
   const deltaMin = asNumber(data.settings?.deltaT_evap_min, 4);
-  const correlation = corrCoef(series.map((p) => asNumber(p.oat, NaN)), series.map((p) => asNumber(p.kwtr, NaN)));
+  const correlation = corrCoef(series.map((p) => asNumber(p.oat ?? (p as Record<string, unknown>).temp_externa, NaN)), series.map((p) => asNumber(p.kwtr, NaN)));
   const outOfMeta = series.filter((p) => p.kwtr !== null && p.kwtr > meta).length;
   const lowDelta = series.filter((p) => p.deltaT !== null && p.deltaT < deltaMin).length;
   const peak = series.reduce<AnalyticPoint | null>((max, p) => (!max || asNumber(p.kw) > asNumber(max.kw) ? p : max), null);
@@ -624,7 +624,7 @@ function AnalyticsPage() {
 
   const series = buildAnalyticsSeries(data);
   const meta = asNumber(data.overview.kwtr_meta ?? data.settings?.meta_kwtr, 0.88);
-  const correlation = corrCoef(series.map((p) => asNumber(p.oat, NaN)), series.map((p) => asNumber(p.kwtr, NaN)));
+  const correlation = corrCoef(series.map((p) => asNumber(p.oat ?? (p as Record<string, unknown>).temp_externa, NaN)), series.map((p) => asNumber(p.kwtr, NaN)));
   const best = series.filter((p) => p.kwtr && p.kwtr > 0).sort((a, b) => asNumber(a.kwtr) - asNumber(b.kwtr))[0];
   const worst = series.filter((p) => p.kwtr && p.kwtr > 0).sort((a, b) => asNumber(b.kwtr) - asNumber(a.kwtr))[0];
   const peak = series.reduce<AnalyticPoint | null>((max, p) => (!max || asNumber(p.kw) > asNumber(max.kw) ? p : max), null);

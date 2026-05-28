@@ -170,8 +170,8 @@ function buildReportSeries(data: DashboardData): ReportPoint[] {
         cop: maybeNumber(p.cop_real),
         carbon,
         cost: tariff !== null ? kwh * tariff : maybeNumber((p as Record<string, unknown>).custo_energia),
-        oat: maybeNumber(p.oat),
-        deltaT: maybeNumber(p.deltaT_evap_medio),
+        oat: maybeNumber(p.oat ?? (p as Record<string, unknown>).temp_externa),
+        deltaT: maybeNumber(p.deltaT_evap_medio ?? (p as Record<string, unknown>).delta_t_ag ?? (p as Record<string, unknown>).delta_t_medio ?? (p as Record<string, unknown>).deltaT_medio),
         cumulativeKwh: round(cumulativeKwh, 2) ?? 0,
         cumulativeCarbon: round(cumulativeCarbon, 6) ?? 0,
       };
@@ -237,7 +237,7 @@ function ReportsHero({ data, points }: { data: DashboardData; points: ReportPoin
   const endDate = formatDate(data.overview.periodo_fim);
   const label = period === "day" || startDate === endDate ? endDate : `${startDate} – ${endDate}`;
   const insights = data.reports?.insights?.length ?? buildInsights(data).length;
-  const hasCost = Number.isFinite(Number((data.overview as Record<string, unknown>).custo_total));
+  const hasCost = Number.isFinite(Number((data.overview as Record<string, unknown>).custo_total)) || Number.isFinite(Number(data.settings?.tarifa_kwh));
 
   return (
     <div className="control-card rounded-2xl p-4">

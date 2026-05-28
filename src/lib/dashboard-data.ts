@@ -50,10 +50,14 @@ export interface DashboardPoint {
   desvio_meta_kwtr?: number | null;
   cop_real?: number | null;
   deltaT_evap_medio?: number | null;
+  delta_t_ag?: number | null;
+  delta_t_medio?: number | null;
+  deltaT_medio?: number | null;
   deltaT_cond_medio?: number | null;
   carbono_kg?: number | null;
   carbono_ton?: number | null;
   oat?: number | null;
+  temp_externa?: number | null;
   vazao?: number | null;
   chillers?: unknown[];
 }
@@ -74,14 +78,22 @@ export interface DashboardData {
     carbono_kg?: number | null;
     carbono_ton?: number | null;
     custo_total?: number | null;
+    tarifa_kwh?: number | null;
+    baseline_kwh_dia?: number | null;
+    baseline_kwh_periodo?: number | null;
+    economia_kwh?: number | null;
+    economia_percentual?: number | null;
     economia_vs_baseline_kwh?: number | null;
     economia_vs_baseline_percent?: number | null;
     kwh_m2?: number | null;
     trh_m2?: number | null;
     kw_pico_m2?: number | null;
     deltaT_evap_medio?: number | null;
+    delta_t_medio?: number | null;
+    deltaT_medio?: number | null;
     deltaT_cond_medio?: number | null;
     oat_medio?: number | null;
+    temp_externa_media?: number | null;
     vazao_media?: number | null;
   };
   chillers: DashboardChiller[];
@@ -257,6 +269,48 @@ function asNumber(value: unknown, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function pickNumber(...values: unknown[]) {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function pointDeltaT(point: DashboardPoint) {
+  return pickNumber(
+    point.deltaT_evap_medio,
+    point.delta_t_ag,
+    point.delta_t_medio,
+    point.deltaT_medio,
+    (point as Record<string, unknown>).deltaT
+  );
+}
+
+function pointOat(point: DashboardPoint) {
+  return pickNumber(point.oat, point.temp_externa, (point as Record<string, unknown>).temperatura_externa);
+}
+
+function chillerCap(chiller: Record<string, unknown>) {
+  return pickNumber(chiller.cap_pct, chiller.capacidade_pct, chiller.cap_atual, chiller.cap_media);
+}
+
+function chillerDeltaT(chiller: Record<string, unknown>) {
+  return pickNumber(chiller.deltaT_evap, chiller.delta_t_ag, chiller.deltaT_evap_medio, chiller.delta_t_medio);
+}
+
+function chillerKwh(chiller: Record<string, unknown>, intervalHours: number) {
+  return pickNumber(chiller.kwh) ?? asNumber(chiller.kw) * intervalHours;
+}
+
+function chillerTrh(chiller: Record<string, unknown>, intervalHours: number) {
+  return pickNumber(chiller.trh) ?? asNumber(chiller.tr) * intervalHours;
+}
+
+function isChillerOnline(chiller: Record<string, unknown>) {
+  return Boolean(chiller.online) || chiller.status === "Online" || asNumber(chiller.kw) > 0 || asNumber(chiller.tr) > 0 || asNumber(chillerCap(chiller)) > 0;
+}
+
 function sumValues<T>(arr: T[], selector: (item: T) => unknown) {
   return arr.reduce((acc, item) => acc + asNumber(selector(item)), 0);
 }
@@ -311,7 +365,7 @@ function aggregatePointsForDay(date: string, points: DashboardPoint[], settings:
     kwtr_medio: roundValue(kwtr, 3),
     cop_medio: roundValue(cop, 2),
     trh_total: roundValue(trh, 2),
-    deltaT_evap_medio: roundValue(avgValues(dayPoints.filter((p) => asNumber(p.tr_total) > 0), (p) => p.deltaT_evap_medio), 2),
+    deltaT_evap_medio: roundValue(avgValues(dayPoints.filter((p) => asNumber(p.tr_total) > 0), (p) => pointDeltaT(p)), 2),
     pico_kw: roundValue(picoKw, 2),
     horas_operacao: roundValue(horas, 2),
   };
@@ -335,7 +389,7 @@ function aggregatePointsForDates(dates: string[], points: DashboardPoint[], sett
     kwtr_medio: roundValue(kwtr, 3),
     cop_medio: roundValue(cop, 2),
     trh_total: roundValue(trh, 2),
-    deltaT_evap_medio: roundValue(avgValues(periodPoints.filter((p) => asNumber(p.tr_total) > 0), (p) => p.deltaT_evap_medio), 2),
+    deltaT_evap_medio: roundValue(avgValues(periodPoints.filter((p) => asNumber(p.tr_total) > 0), (p) => pointDeltaT(p)), 2),
     pico_kw: roundValue(picoKw, 2),
     horas_operacao: roundValue(horas, 2),
   };
@@ -508,19 +562,19 @@ function buildDailyChillers(points: DashboardPoint[], totalKwh: number, interval
 
   return Array.from(byId.entries()).map(([id, registros]) => {
     const last = registros[registros.length - 1] ?? {};
-    const kwh = sumValues(registros, (r) => r.kwh);
-    const trh = sumValues(registros, (r) => r.trh);
+    const kwh = sumValues(registros, (r) => chillerKwh(r, intervalHours));
+    const trh = sumValues(registros, (r) => chillerTrh(r, intervalHours));
     const kwtr = safeRatio(kwh, trh);
     const cop = kwtr ? 3.516 / kwtr : null;
-    const horas = registros.filter((r) => Boolean(r.online) || r.status === "Online").length * intervalHours;
-    const capMedia = avgValues(registros.filter((r) => Boolean(r.online) && asNumber(r.cap_pct) > 0), (r) => r.cap_pct);
-    const deltaT = avgValues(registros.filter((r) => Boolean(r.validThermal)), (r) => r.deltaT_evap);
+    const horas = registros.filter((r) => isChillerOnline(r)).length * intervalHours;
+    const capMedia = avgValues(registros.filter((r) => isChillerOnline(r) && asNumber(chillerCap(r)) > 0), (r) => chillerCap(r));
+    const deltaT = avgValues(registros.filter((r) => isChillerOnline(r) && chillerDeltaT(r) !== null), (r) => chillerDeltaT(r));
 
     return {
       id,
       name: String(last.name || id),
       status: String(last.status || (last.online ? "Online" : "Standby")),
-      online: Boolean(last.online) || last.status === "Online",
+      online: isChillerOnline(last),
       kwh: roundValue(kwh, 2),
       trh: roundValue(trh, 2),
       kwtr: roundValue(kwtr, 3),
@@ -531,7 +585,7 @@ function buildDailyChillers(points: DashboardPoint[], totalKwh: number, interval
       deltaT_evap_medio: roundValue(deltaT, 2),
       kw_atual: roundValue(asNumber(last.kw), 2),
       tr_atual: roundValue(asNumber(last.tr), 2),
-      cap_atual: roundValue(asNumber(last.cap_pct), 0),
+      cap_atual: roundValue(asNumber(chillerCap(last)), 0),
     };
   });
 }
@@ -568,6 +622,14 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
   const picoKw = asNumber(picoPoint?.kw_total, 0);
   const carbonoKg = totalKwh * carbonFactor;
   const carbonoTon = carbonoKg / 1000;
+  const tariff = pickNumber(data.overview.tarifa_kwh, data.settings?.tarifa_kwh);
+  const baselineKwhDia = pickNumber(data.overview.baseline_kwh_dia, data.settings?.baseline_kwh_dia);
+  const baselineKwhPeriodo = pickNumber(data.overview.baseline_kwh_periodo) ?? (baselineKwhDia !== null ? baselineKwhDia * periodDates.length : null);
+  const economiaKwh = baselineKwhPeriodo !== null ? baselineKwhPeriodo - totalKwh : null;
+  const economiaPercentual = baselineKwhPeriodo && baselineKwhPeriodo > 0 ? (economiaKwh! / baselineKwhPeriodo) * 100 : null;
+  const custoTotal = tariff !== null ? totalKwh * tariff : null;
+  const deltaTMedio = roundValue(avgValues(points.filter((p) => asNumber(p.tr_total) > 0), (p) => pointDeltaT(p)), 2);
+  const oatMedio = roundValue(avgValues(points, (p) => pointOat(p)), 2);
 
   const overview: DashboardData["overview"] = {
     ...data.overview,
@@ -583,12 +645,23 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
     hora_pico: picoPoint?.timestamp ?? null,
     carbono_kg: roundValue(carbonoKg, 3),
     carbono_ton: roundValue(carbonoTon, 6),
+    tarifa_kwh: tariff,
+    custo_total: roundValue(custoTotal, 2),
+    baseline_kwh_dia: baselineKwhDia,
+    baseline_kwh_periodo: roundValue(baselineKwhPeriodo, 2),
+    economia_kwh: roundValue(economiaKwh, 2),
+    economia_percentual: roundValue(economiaPercentual, 2),
+    economia_vs_baseline_kwh: roundValue(economiaKwh, 2),
+    economia_vs_baseline_percent: roundValue(economiaPercentual, 2),
     kwh_m2: area > 0 ? roundValue(totalKwh / area, 6) : null,
     trh_m2: area > 0 ? roundValue(totalTrh / area, 6) : null,
     kw_pico_m2: area > 0 ? roundValue(picoKw / area, 6) : null,
-    deltaT_evap_medio: roundValue(avgValues(points.filter((p) => asNumber(p.tr_total) > 0), (p) => p.deltaT_evap_medio), 2),
+    deltaT_evap_medio: deltaTMedio,
+    delta_t_medio: deltaTMedio,
+    deltaT_medio: deltaTMedio,
     deltaT_cond_medio: roundValue(avgValues(points.filter((p) => asNumber(p.tr_total) > 0), (p) => p.deltaT_cond_medio), 2),
-    oat_medio: roundValue(avgValues(points, (p) => p.oat), 2),
+    oat_medio: oatMedio,
+    temp_externa_media: oatMedio,
     vazao_media: roundValue(avgValues(points, (p) => p.vazao), 2),
   };
 
@@ -829,7 +902,7 @@ export function buildKpis(data: DashboardData): DashboardKpi[] {
     { key: "deltaT", label: "Delta-T médio", value: formatNumber(o.deltaT_evap_medio, 2), unit: "°C", ...withComp("deltaT"), goodWhen: "up", color: "water", sparkline: trend(data, "deltaT", s, "deltaT_evap_medio") },
     { key: "peak", label: "Pico de demanda", value: formatNumber(o.pico_kw), unit: "kW", ...withComp("peak"), goodWhen: "down", color: "warning", sparkline: trend(data, "peak", s, "kw_total"), extra: `Hora pico: ${formatDateTime(o.hora_pico)}` },
     { key: "hours", label: "Horas operação", value: formatNumber(totalHours, 1), unit: "h", ...withComp("hours"), goodWhen: "up", color: "warning", sparkline: trend(data, "hours") },
-    { key: "baseline", label: "Economia vs baseline", value: formatNumber(o.economia_vs_baseline_percent, 2), unit: "%", dod: Number(o.economia_vs_baseline_percent ?? 0), d7: 0, goodWhen: "up", color: "efficiency", sparkline: trend(data, "baseline"), extra: "Baseline energético" },
+    { key: "baseline", label: "Economia vs baseline", value: formatNumber(o.economia_vs_baseline_percent ?? o.economia_percentual, 2), unit: "%", dod: Number(o.economia_vs_baseline_percent ?? o.economia_percentual ?? 0), d7: 0, goodWhen: "up", color: "efficiency", sparkline: trend(data, "baseline"), extra: o.economia_kwh !== null && o.economia_kwh !== undefined ? `${formatNumber(o.economia_kwh)} kWh economizados` : "Baseline energético" },
   ];
 }
 

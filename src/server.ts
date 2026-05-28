@@ -188,8 +188,14 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
     });
   }
 
-  // Dados consolidados já gravados pelo serviço de dados: cag:dashboard:latest.
-  return proxyToN8n(request, env, "dashboard-data", "GET");
+  const period = new URL(request.url).searchParams.get("period");
+  const normalizedPeriod = period === "week" || period === "month" ? period : "day";
+
+  // D-1 usa o endpoint diário/latest; Semana e Mês usam o endpoint semanal
+  // enquanto o workflow mensal real ainda não existir.
+  const targetPath = normalizedPeriod === "day" ? "dashboard-data" : "dashboard-data-week";
+
+  return proxyToN8n(request, env, targetPath, "GET");
 }
 
 async function handleSettingsRequest(request: Request, env: unknown): Promise<Response> {

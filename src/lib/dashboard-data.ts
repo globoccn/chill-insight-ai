@@ -9,6 +9,7 @@ export const N8N_API_BASE_URL =
 const n8nBaseUrl = N8N_API_BASE_URL.replace(/\/+$/, "");
 
 export const N8N_DASHBOARD_DATA_URL = `${n8nBaseUrl}/dashboard-data`;
+export const N8N_DASHBOARD_DATA_WEEK_URL = `${n8nBaseUrl}/dashboard-data-week`;
 export const N8N_SETTINGS_URL = `${n8nBaseUrl}/dashboard-settings`;
 export const N8N_UPLOAD_WEBHOOK_URL = `${n8nBaseUrl}/dados-globo-vm22`;
 
@@ -599,6 +600,28 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
   };
 }
 
+
+function urlWithPeriod(url: string, period: DashboardPeriod) {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}period=${encodeURIComponent(period)}`;
+}
+
+function dashboardUrlForPeriod(baseUrl: string, period: DashboardPeriod) {
+  // Quando o browser usa o proxy interno (/api/dashboard), o server.ts decide
+  // se deve chamar dashboard-data ou dashboard-data-week.
+  if (baseUrl === DASHBOARD_DATA_URL) {
+    return urlWithPeriod(baseUrl, period);
+  }
+
+  // Fallback direto para o n8n em preview/local.
+  // Week e month usam o endpoint semanal enquanto o mensal real não existir.
+  if (period === "week" || period === "month") {
+    return urlWithPeriod(N8N_DASHBOARD_DATA_WEEK_URL, period);
+  }
+
+  return urlWithPeriod(baseUrl, period);
+}
+
 async function readResponsePayload(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text.trim()) return null;
@@ -638,13 +661,13 @@ export async function getDashboardDataForPeriod(period: DashboardPeriod = getDas
   }
 
   try {
-    return await fetchAndNormalize(DASHBOARD_DATA_URL);
+    return await fetchAndNormalize(dashboardUrlForPeriod(DASHBOARD_DATA_URL, period));
   } catch (proxyError) {
     // Fallback útil em preview/local quando o /api do dashboard não está ativo.
     // Em produção normal, o /api deve funcionar e evitar CORS.
     if (DASHBOARD_DATA_URL !== N8N_DASHBOARD_DATA_URL) {
       try {
-        return await fetchAndNormalize(N8N_DASHBOARD_DATA_URL);
+        return await fetchAndNormalize(dashboardUrlForPeriod(N8N_DASHBOARD_DATA_URL, period));
       } catch (directError) {
         throw new Error(
           `Não foi possível carregar dados reais. Proxy: ${(proxyError as Error).message}. Direto serviço de dados: ${(directError as Error).message}`,

@@ -191,9 +191,10 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
   const period = new URL(request.url).searchParams.get("period");
   const normalizedPeriod = period === "week" || period === "month" ? period : "day";
 
-  // D-1 usa o endpoint diário/latest; Semana e Mês usam o endpoint semanal
-  // enquanto o workflow mensal real ainda não existir.
-  const targetPath = normalizedPeriod === "day" ? "dashboard-data" : "dashboard-data-week";
+  // Enquanto o backend mensal real ainda não existir, todos os períodos usam
+  // o payload histórico semanal. Assim o frontend recebe os 7 dias e consegue
+  // calcular D-1 vs D-2 e tendências/comparações locais.
+  const targetPath = "dashboard-data-week";
 
   return proxyToN8n(request, env, targetPath, "GET");
 }

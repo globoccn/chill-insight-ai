@@ -341,6 +341,28 @@ function aggregatePointsForDates(dates: string[], points: DashboardPoint[], sett
   };
 }
 
+function aggregateAverageForDates(dates: string[], points: DashboardPoint[], settings: Record<string, unknown> = {}, esg: DashboardData["esg"] = {}): DailyAggregate | null {
+  const daily = dates
+    .map((date) => aggregatePointsForDay(date, points, settings, esg))
+    .filter((item) => item.kwh_total !== null || item.trh_total !== null);
+
+  if (!daily.length) return null;
+
+  const avgMetric = (key: keyof DailyAggregate) => roundValue(avgValues(daily, (item) => item[key]), key === "carbono_ton" ? 6 : 2);
+
+  return {
+    date: daily.at(-1)?.date || dates.at(-1) || "",
+    kwh_total: avgMetric("kwh_total"),
+    carbono_ton: avgMetric("carbono_ton"),
+    kwtr_medio: roundValue(avgValues(daily, (item) => item.kwtr_medio), 3),
+    cop_medio: avgMetric("cop_medio"),
+    trh_total: avgMetric("trh_total"),
+    deltaT_evap_medio: avgMetric("deltaT_evap_medio"),
+    pico_kw: avgMetric("pico_kw"),
+    horas_operacao: avgMetric("horas_operacao"),
+  };
+}
+
 function periodWindowDates(dates: string[], reference: string | null, period: DashboardPeriod) {
   const ref = reference || dates.at(-1) || null;
   if (!ref) return [];
@@ -433,7 +455,13 @@ function buildComparisons(allPoints: DashboardPoint[], selectedDate: string | nu
 
   const currentAgg = aggregatePointsForDates(currentDates, allPoints, settings, esg);
   const previousAgg = previousDates.length ? aggregatePointsForDates(previousDates, allPoints, settings, esg) : null;
-  const sevenAgg = sevenDayDates.length ? aggregatePointsForDates(sevenDayDates, allPoints, settings, esg) : null;
+
+  // Em D-1, "vs 7 dias" deve comparar o dia atual contra a média diária dos dias
+  // anteriores disponíveis, não contra a soma deles. Em semana/mês, usamos o
+  // período anterior equivalente.
+  const sevenAgg = period === "day"
+    ? (sevenDayDates.length ? aggregateAverageForDates(sevenDayDates, allPoints, settings, esg) : null)
+    : previousAgg;
 
   const metric = (key: keyof DailyAggregate) => {
     const current = currentAgg[key] as number | null;
@@ -607,19 +635,14 @@ function urlWithPeriod(url: string, period: DashboardPeriod) {
 }
 
 function dashboardUrlForPeriod(baseUrl: string, period: DashboardPeriod) {
-  // Quando o browser usa o proxy interno (/api/dashboard), o server.ts decide
-  // se deve chamar dashboard-data ou dashboard-data-week.
+  // O frontend precisa receber um payload histórico mesmo em D-1, para calcular
+  // D-1 vs D-2, tendências e "vs 7 dias". O server.ts faz proxy para o endpoint
+  // semanal; no fallback direto também usamos dashboard-data-week.
   if (baseUrl === DASHBOARD_DATA_URL) {
     return urlWithPeriod(baseUrl, period);
   }
 
-  // Fallback direto para o n8n em preview/local.
-  // Week e month usam o endpoint semanal enquanto o mensal real não existir.
-  if (period === "week" || period === "month") {
-    return urlWithPeriod(N8N_DASHBOARD_DATA_WEEK_URL, period);
-  }
-
-  return urlWithPeriod(baseUrl, period);
+  return urlWithPeriod(N8N_DASHBOARD_DATA_WEEK_URL, period);
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {
@@ -715,11 +738,11 @@ export async function getDashboardDataFull(): Promise<DashboardData> {
   }
 
   try {
-    return await fetchAndNormalizeFull(DASHBOARD_DATA_URL);
+    return await fetchAndNormalizeFull(dashboardUrlForPeriod(DASHBOARD_DATA_URL, "week"));
   } catch (proxyError) {
     if (DASHBOARD_DATA_URL !== N8N_DASHBOARD_DATA_URL) {
       try {
-        return await fetchAndNormalizeFull(N8N_DASHBOARD_DATA_URL);
+        return await fetchAndNormalizeFull(dashboardUrlForPeriod(N8N_DASHBOARD_DATA_URL, "week"));
       } catch (directError) {
         throw new Error(
           `Não foi possível carregar dados reais. Proxy: ${(proxyError as Error).message}. Direto serviço de dados: ${(directError as Error).message}`,

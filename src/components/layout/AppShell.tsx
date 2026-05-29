@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { ThemeProvider } from "@/lib/theme";
+import { AiAgent } from "@/components/ai/AiAgent";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -12,6 +13,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Header />
           <main className="flex-1 px-5 py-4 space-y-4">{children}</main>
         </div>
+        <AiAgent />
       </div>
     </ThemeProvider>
   );

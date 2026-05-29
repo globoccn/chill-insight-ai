@@ -199,6 +199,19 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
   return proxyToN8n(request, env, targetPath, "GET");
 }
 
+
+async function handleCagBotRequest(request: Request, env: unknown): Promise<Response> {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: jsonHeaders() });
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify({ error: true, message: "Method not allowed" }), {
+      status: 405,
+      headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }),
+    });
+  }
+
+  return proxyToN8n(request, env, "cag-bot-gemini-v2", "POST");
+}
+
 async function handleSettingsRequest(request: Request, env: unknown): Promise<Response> {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: jsonHeaders() });
   if (!["GET", "POST"].includes(request.method)) {
@@ -287,6 +300,10 @@ export default {
 
     if (url.pathname === "/api/settings") {
       return handleSettingsRequest(request, env);
+    }
+
+    if (url.pathname === "/api/cag-bot") {
+      return handleCagBotRequest(request, env);
     }
 
     try {

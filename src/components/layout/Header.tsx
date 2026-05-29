@@ -1,7 +1,8 @@
-import { Calendar, CheckCircle2, Moon, Sun, ChevronDown } from "lucide-react";
+import { Calendar, CheckCircle2, Moon, Sun, ChevronDown, LogOut } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { formatDate, formatDateTime, useDashboardData } from "@/lib/dashboard-data";
 import { periodLabels, setDashboardPeriod, useDashboardPeriod, type DashboardPeriod } from "@/lib/period";
+import { logoutDemo } from "@/lib/auth";
 
 export function Header() {
   const { theme, toggle } = useTheme();
@@ -63,10 +64,15 @@ export function Header() {
             <span className={["grid h-7 w-7 place-items-center rounded-full transition", theme === "dark" ? "bg-efficiency/20 text-efficiency" : "text-muted-foreground"].join(" ")}><Moon className="h-3.5 w-3.5" /></span>
           </button>
 
-          <div className="flex items-center gap-2 rounded-full border border-border bg-card pl-1 pr-3 py-1 text-sm shadow-sm">
+          <button
+            type="button"
+            onClick={() => logoutDemo()}
+            className="flex items-center gap-2 rounded-full border border-border bg-card pl-1 pr-3 py-1 text-sm shadow-sm transition hover:border-critical/40 hover:text-critical"
+            title="Sair"
+          >
             <div className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-efficiency to-esg text-[11px] font-semibold text-background">AS</div>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </div>
+            <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
         </div>
       </div>
     </header>

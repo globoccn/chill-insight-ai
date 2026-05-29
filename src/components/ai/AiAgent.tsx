@@ -5,7 +5,14 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-const AI_AGENT_URL = import.meta.env.VITE_AI_AGENT_URL || "/api/cag-bot";
+const RAW_AI_AGENT_URL = import.meta.env.VITE_AI_AGENT_URL || "/api/cag-bot";
+
+// Para evitar CORS com o webhook do n8n no navegador, o chat usa sempre o proxy
+// server-side da própria dashboard quando a variável aponta para uma URL externa.
+const AI_AGENT_URL =
+  typeof RAW_AI_AGENT_URL === "string" && RAW_AI_AGENT_URL.startsWith("/")
+    ? RAW_AI_AGENT_URL
+    : "/api/cag-bot";
 
 type ChatMessage = {
   id: string;
@@ -71,6 +78,9 @@ export function AiAgent() {
     setIsLoading(true);
 
     try {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 75000);
+
       const response = await fetch(AI_AGENT_URL, {
         method: "POST",
         headers: {
@@ -78,7 +88,8 @@ export function AiAgent() {
           accept: "application/json",
         },
         body: JSON.stringify({ question: cleanQuestion }),
-      });
+        signal: controller.signal,
+      }).finally(() => window.clearTimeout(timeout));
 
       const rawText = await response.text();
       let payload: unknown = null;
@@ -100,9 +111,15 @@ export function AiAgent() {
         newMessage("assistant", answer || "Recebi os dados, mas não encontrei uma resposta textual no retorno do bot."),
       ]);
     } catch (error) {
+      const message = error instanceof DOMException && error.name === "AbortError"
+        ? "A consulta demorou mais que o esperado. Tente novamente em alguns instantes."
+        : error instanceof Error
+          ? error.message
+          : "Tente novamente.";
+
       setMessages((current) => [
         ...current,
-        newMessage("assistant", `Não consegui consultar o Assistente CAG agora. ${error instanceof Error ? error.message : "Tente novamente."}`),
+        newMessage("assistant", `Não consegui consultar o Assistente CAG agora. ${message}`),
       ]);
     } finally {
       setIsLoading(false);

@@ -200,6 +200,108 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
 }
 
 
+
+function extractBotAnswer(payload: unknown): string | null {
+  if (typeof payload === "string") return payload.trim() || null;
+  if (!payload || typeof payload !== "object") return null;
+
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const answer = extractBotAnswer((item as Record<string, unknown>)?.json ?? item);
+      if (answer) return answer;
+    }
+    return null;
+  }
+
+  const data = payload as Record<string, unknown>;
+  for (const key of ["answer", "response", "text", "message", "output", "content", "data"] as const) {
+    if (typeof data[key] === "string" && data[key].trim()) return data[key].trim();
+  }
+
+  if (data.json) {
+    const answer = extractBotAnswer(data.json);
+    if (answer) return answer;
+  }
+
+  if (data.body) {
+    const answer = extractBotAnswer(data.body);
+    if (answer) return answer;
+  }
+
+  if (typeof data.answer_fallback === "string" && data.answer_fallback.trim()) {
+    return data.answer_fallback.trim();
+  }
+
+  return null;
+}
+
+async function proxyBotToN8n(request: Request, env: unknown): Promise<Response> {
+  const target = `${getN8nBaseUrl(env)}/cag-bot-gemini-v2`;
+  const bodyText = await request.clone().text();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 75000);
+
+  try {
+    const response = await fetch(target, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json,text/plain,*/*",
+      },
+      body: bodyText,
+      signal: controller.signal,
+    });
+
+    const rawText = await response.text().catch(() => "");
+    let payload: unknown = rawText;
+
+    try {
+      payload = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      payload = rawText;
+    }
+
+    const answer = extractBotAnswer(payload);
+
+    if (!response.ok) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: true,
+          answer: answer || "O Assistente CAG retornou erro ao consultar o n8n.",
+          status: response.status,
+          detail: payload,
+        }),
+        { status: response.status, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        answer: answer || "Recebi os dados, mas não encontrei uma resposta textual no retorno do bot.",
+        raw: payload,
+      }),
+      { status: 200, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+    );
+  } catch (error) {
+    const isAbort = error instanceof DOMException && error.name === "AbortError";
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: true,
+        answer: isAbort
+          ? "A consulta ao Assistente CAG demorou mais que o esperado. Tente novamente."
+          : "Não consegui consultar o Assistente CAG agora.",
+        detail: error instanceof Error ? error.message : String(error),
+      }),
+      { status: isAbort ? 504 : 502, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function handleCagBotRequest(request: Request, env: unknown): Promise<Response> {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: jsonHeaders() });
   if (request.method !== "POST") {
@@ -209,7 +311,7 @@ async function handleCagBotRequest(request: Request, env: unknown): Promise<Resp
     });
   }
 
-  return proxyToN8n(request, env, "cag-bot-gemini-v2", "POST");
+  return proxyBotToN8n(request, env);
 }
 
 async function handleSettingsRequest(request: Request, env: unknown): Promise<Response> {

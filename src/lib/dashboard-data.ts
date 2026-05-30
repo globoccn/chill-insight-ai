@@ -163,6 +163,52 @@ const emptyData: DashboardData = {
   daily_trends: {},
 };
 
+
+// Filtros de segurança para ignorar leituras irreais causadas por perda de referência de sensores.
+// Valores acima destes limites não entram em cards, gráficos, comparativos ou agregações do período.
+const MAX_VALID_KW = 1000;
+const MAX_VALID_KWTR = 5;
+
+function isValidSensorValue(value: unknown, max: number, min = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return true;
+  return n >= min && n <= max;
+}
+
+function isValidDashboardPoint(point: DashboardPoint) {
+  const kwValues = [
+    point.kw_total,
+    point.kw_chillers,
+    point.kw_bombas,
+    point.kw_torres,
+    point.kw_auxiliares,
+  ];
+
+  if (kwValues.some((value) => !isValidSensorValue(value, MAX_VALID_KW))) return false;
+
+  const kwtrValues = [
+    point.kwtr_real,
+    (point as Record<string, unknown>).kwtr,
+    (point as Record<string, unknown>).kwtr_planta,
+  ];
+
+  if (kwtrValues.some((value) => !isValidSensorValue(value, MAX_VALID_KWTR))) return false;
+
+  const chillers = Array.isArray(point.chillers) ? point.chillers : [];
+  for (const raw of chillers) {
+    if (!raw || typeof raw !== "object") continue;
+    const chiller = raw as Record<string, unknown>;
+    if (!isValidSensorValue(chiller.kw, MAX_VALID_KW)) return false;
+    if (!isValidSensorValue(chiller.kwtr, MAX_VALID_KWTR)) return false;
+  }
+
+  return true;
+}
+
+function filterValidDashboardPoints(points: DashboardPoint[]) {
+  return points.filter(isValidDashboardPoint);
+}
+
 export function formatNumber(value: number | null | undefined, decimals = 0) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   return value.toLocaleString("pt-BR", {
@@ -611,7 +657,8 @@ function buildDailyChillers(points: DashboardPoint[], totalChillersKwh: number, 
 }
 
 function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"): DashboardData {
-  const allPoints = Array.isArray(data.analytics?.series_15min) ? data.analytics.series_15min : [];
+  const rawPoints = Array.isArray(data.analytics?.series_15min) ? data.analytics.series_15min : [];
+  const allPoints = filterValidDashboardPoints(rawPoints);
   const allDates = Array.from(new Set(allPoints.map((p) => dateKey(p.timestamp)).filter(Boolean) as string[])).sort();
   const selectedDate = dateKey(data.overview?.periodo_fim) || dateKey(allPoints.at(-1)?.timestamp) || allDates.at(-1) || null;
   const periodDates = periodWindowDates(allDates, selectedDate, period);
@@ -841,7 +888,7 @@ export async function getDashboardDataFull(): Promise<DashboardData> {
       throw new Error(`Resposta sem overview em ${url}`);
     }
 
-    return data;
+    return scopeDashboardData(data, "week");
   }
 
   try {
@@ -955,7 +1002,7 @@ function positiveOrNull(value: unknown) {
 export function buildChartSeries(data: DashboardData) {
   let cumulative = 0;
   const rawSeries = data.analytics.series_15min ?? [];
-  const operationalSeries = rawSeries.filter((p) => {
+  const operationalSeries = filterValidDashboardPoints(rawSeries).filter((p) => {
     const kw = Number(p.kw_total ?? 0);
     const tr = Number(p.tr_total ?? 0);
     return (Number.isFinite(kw) && kw > 0) || (Number.isFinite(tr) && tr > 0);
@@ -995,7 +1042,7 @@ export function buildConsumptionByPeriod(data: DashboardData) {
     { period: "Noite (18h–24h)", start: 18, end: 24, color: "esg" as const, kWh: 0 },
   ];
 
-  for (const p of data.analytics.series_15min) {
+  for (const p of filterValidDashboardPoints(data.analytics.series_15min)) {
     const d = new Date(p.timestamp ?? "");
     if (Number.isNaN(d.getTime())) continue;
     const hour = d.getHours();

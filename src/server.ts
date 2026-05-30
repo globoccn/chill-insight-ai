@@ -188,15 +188,21 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
     });
   }
 
-  const period = new URL(request.url).searchParams.get("period");
+  const url = new URL(request.url);
+  const period = url.searchParams.get("period");
   const normalizedPeriod = period === "week" || period === "month" ? period : "day";
 
-  // Enquanto o backend mensal real ainda não existir, todos os períodos usam
-  // o payload histórico semanal. Assim o frontend recebe os 7 dias e consegue
-  // calcular D-1 vs D-2 e tendências/comparações locais.
-  const targetPath = "dashboard-data-week";
+  // D-1 também usa 7 dias para manter comparações locais.
+  // Semana: tenta 7 dias. Mês: tenta 30 dias. O n8n deve devolver apenas os dias existentes.
+  const targetPath = normalizedPeriod === "month" ? "dashboard-data-month" : "dashboard-data-week";
 
-  return proxyToN8n(request, env, targetPath, "GET");
+  url.searchParams.set("period", normalizedPeriod);
+  if (!url.searchParams.has("days")) {
+    url.searchParams.set("days", normalizedPeriod === "month" ? "30" : "7");
+  }
+
+  const proxiedRequest = new Request(url.toString(), request);
+  return proxyToN8n(proxiedRequest, env, targetPath, "GET");
 }
 
 

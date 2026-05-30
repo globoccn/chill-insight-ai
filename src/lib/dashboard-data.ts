@@ -10,6 +10,7 @@ const n8nBaseUrl = N8N_API_BASE_URL.replace(/\/+$/, "");
 
 export const N8N_DASHBOARD_DATA_URL = `${n8nBaseUrl}/dashboard-data`;
 export const N8N_DASHBOARD_DATA_WEEK_URL = `${n8nBaseUrl}/dashboard-data-week`;
+export const N8N_DASHBOARD_DATA_MONTH_URL = `${n8nBaseUrl}/dashboard-data-month`;
 export const N8N_SETTINGS_URL = `${n8nBaseUrl}/dashboard-settings`;
 export const N8N_UPLOAD_WEBHOOK_URL = `${n8nBaseUrl}/dados-globo-vm22`;
 
@@ -68,6 +69,10 @@ export interface DashboardData {
     periodo_inicio?: string | null;
     periodo_fim?: string | null;
     kwh_total?: number | null;
+    kwh_chillers?: number | null;
+    kwh_bombas?: number | null;
+    kwh_torres?: number | null;
+    kwh_auxiliares?: number | null;
     trh_total?: number | null;
     kwtr_medio?: number | null;
     kwtr_meta?: number | null;
@@ -704,18 +709,21 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
 
 function urlWithPeriod(url: string, period: DashboardPeriod) {
   const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}period=${encodeURIComponent(period)}`;
+  const days = period === "month" ? 30 : 7;
+
+  // Mesmo no D-1 buscamos um payload histórico curto para comparações locais.
+  return `${url}${separator}period=${encodeURIComponent(period)}&days=${days}`;
 }
 
 function dashboardUrlForPeriod(baseUrl: string, period: DashboardPeriod) {
-  // O frontend precisa receber um payload histórico mesmo em D-1, para calcular
-  // D-1 vs D-2, tendências e "vs 7 dias". O server.ts faz proxy para o endpoint
-  // semanal; no fallback direto também usamos dashboard-data-week.
+  // O frontend precisa receber payload histórico para calcular D-1 vs D-2,
+  // tendências e comparações locais. Semana usa 7 dias; mês usa até 30 dias.
   if (baseUrl === DASHBOARD_DATA_URL) {
     return urlWithPeriod(baseUrl, period);
   }
 
-  return urlWithPeriod(N8N_DASHBOARD_DATA_WEEK_URL, period);
+  const periodUrl = period === "month" ? N8N_DASHBOARD_DATA_MONTH_URL : N8N_DASHBOARD_DATA_WEEK_URL;
+  return urlWithPeriod(periodUrl, period);
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {

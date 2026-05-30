@@ -27,20 +27,15 @@ export function ChillersTable({ data }: { data: DashboardData }) {
   const chillers = data.chillers;
   const overview = data.overview;
 
-  const totalChillersKwh =
-    safeNumber(overview.kwh_chillers) ||
-    chillers.reduce((acc, c) => acc + safeNumber(c.kwh), 0);
+  const totalChillersKwh = chillers.reduce((acc, c) => acc + safeNumber(c.kwh), 0) || safeNumber(overview.kwh_chillers);
 
   const totalPlantKwh = safeNumber(overview.kwh_total);
+  const auxiliaresKwh = safeNumber(overview.kwh_auxiliares) || Math.max(0, totalPlantKwh - totalChillersKwh);
   const bombasKwh = safeNumber(overview.kwh_bombas);
   const torresKwh = safeNumber(overview.kwh_torres);
-  const auxiliaresKwh =
-    safeNumber(overview.kwh_auxiliares) ||
-    bombasKwh + torresKwh ||
-    Math.max(0, totalPlantKwh - totalChillersKwh);
 
   const rows = [...chillers].sort((a, b) => safeNumber(b.kwh) - safeNumber(a.kwh));
-  const activeCount = rows.filter((c) => safeNumber(c.kwh) > 0 || safeNumber(c.trh) > 0 || safeNumber(c.horas_operacao) > 0).length;
+  const activeCount = rows.filter((c) => safeNumber(c.kwh) > 0 && safeNumber(c.trh) > 0).length;
 
   return (
     <div className="control-card h-full rounded-2xl p-4 overflow-hidden">
@@ -84,7 +79,7 @@ export function ChillersTable({ data }: { data: DashboardData }) {
           <tbody>
             {rows.map((c) => {
               const share = totalChillersKwh > 0 ? (safeNumber(c.kwh) / totalChillersKwh) * 100 : null;
-              const isOff = safeNumber(c.kwh) <= 0 && safeNumber(c.trh) <= 0 && safeNumber(c.horas_operacao) <= 0;
+              const isOff = safeNumber(c.kwh) <= 0 && safeNumber(c.trh) <= 0;
               const status = isOff ? "Off" : c.status;
 
               return (

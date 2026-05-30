@@ -46,6 +46,14 @@ export interface DashboardPoint {
   tr_total?: number | null;
   kwh_total?: number | null;
   trh_total?: number | null;
+  kw_chillers?: number | null;
+  kw_bombas?: number | null;
+  kw_torres?: number | null;
+  kw_auxiliares?: number | null;
+  kwh_chillers?: number | null;
+  kwh_bombas?: number | null;
+  kwh_torres?: number | null;
+  kwh_auxiliares?: number | null;
   kwtr_real?: number | null;
   kwtr_meta?: number | null;
   desvio_meta_kwtr?: number | null;
@@ -320,6 +328,13 @@ function sumValues<T>(arr: T[], selector: (item: T) => unknown) {
   return arr.reduce((acc, item) => acc + asNumber(selector(item)), 0);
 }
 
+function pointEnergy(point: DashboardPoint, kwhKey: keyof DashboardPoint, kwKey: keyof DashboardPoint, intervalHours: number) {
+  const kwh = pickNumber(point[kwhKey]);
+  if (kwh !== null) return kwh;
+  const kw = pickNumber(point[kwKey]);
+  return kw !== null ? kw * intervalHours : 0;
+}
+
 function avgValues<T>(arr: T[], selector: (item: T) => unknown) {
   const values = arr.map(selector).map((v) => Number(v)).filter((v) => Number.isFinite(v));
   if (!values.length) return null;
@@ -551,7 +566,7 @@ function buildComparisons(allPoints: DashboardPoint[], selectedDate: string | nu
   };
 }
 
-function buildDailyChillers(points: DashboardPoint[], totalKwh: number, intervalHours: number): DashboardChiller[] {
+function buildDailyChillers(points: DashboardPoint[], totalChillersKwh: number, intervalHours: number): DashboardChiller[] {
   const byId = new Map<string, Record<string, unknown>[]>();
 
   for (const point of points) {
@@ -585,7 +600,7 @@ function buildDailyChillers(points: DashboardPoint[], totalKwh: number, interval
       kwtr: roundValue(kwtr, 3),
       cop: roundValue(cop, 2),
       horas_operacao: roundValue(horas, 2),
-      participacao_consumo: totalKwh > 0 ? roundValue((kwh / totalKwh) * 100, 2) : 0,
+      participacao_consumo: totalChillersKwh > 0 ? roundValue((kwh / totalChillersKwh) * 100, 2) : 0,
       cap_media: roundValue(capMedia, 0),
       deltaT_evap_medio: roundValue(deltaT, 2),
       kw_atual: roundValue(asNumber(last.kw), 2),
@@ -616,6 +631,13 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
 
   const totalKwh = sumValues(points, (p) => p.kwh_total);
   const totalTrh = sumValues(points, (p) => p.trh_total);
+  const totalKwhChillers = sumValues(points, (p) => pointEnergy(p, "kwh_chillers", "kw_chillers", intervalHours));
+  const totalKwhBombas = sumValues(points, (p) => pointEnergy(p, "kwh_bombas", "kw_bombas", intervalHours));
+  const totalKwhTorres = sumValues(points, (p) => pointEnergy(p, "kwh_torres", "kw_torres", intervalHours));
+  const totalKwhAuxiliaresRaw = sumValues(points, (p) => pointEnergy(p, "kwh_auxiliares", "kw_auxiliares", intervalHours));
+  const totalKwhAuxiliares = totalKwhAuxiliaresRaw > 0
+    ? totalKwhAuxiliaresRaw
+    : (totalKwhBombas + totalKwhTorres > 0 ? totalKwhBombas + totalKwhTorres : Math.max(0, totalKwh - totalKwhChillers));
   const kwtr = safeRatio(totalKwh, totalTrh);
   const cop = kwtr ? 3.516 / kwtr : null;
   const desvio = kwtr && metaKwtr > 0 ? ((kwtr - metaKwtr) / metaKwtr) * 100 : null;
@@ -641,6 +663,10 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
     periodo_inicio: points[0]?.timestamp ?? data.overview.periodo_inicio,
     periodo_fim: points.at(-1)?.timestamp ?? data.overview.periodo_fim,
     kwh_total: roundValue(totalKwh, 2),
+    kwh_chillers: roundValue(totalKwhChillers, 2),
+    kwh_bombas: roundValue(totalKwhBombas, 2),
+    kwh_torres: roundValue(totalKwhTorres, 2),
+    kwh_auxiliares: roundValue(totalKwhAuxiliares, 2),
     trh_total: roundValue(totalTrh, 2),
     kwtr_medio: roundValue(kwtr, 3),
     kwtr_meta: metaKwtr,
@@ -670,7 +696,7 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
     vazao_media: roundValue(avgValues(points, (p) => p.vazao), 2),
   };
 
-  const chillers = buildDailyChillers(points, totalKwh, intervalHours);
+  const chillers = buildDailyChillers(points, totalKwhChillers, intervalHours);
 
   return {
     ...data,

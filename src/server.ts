@@ -262,6 +262,8 @@ async function handleReportRequest(request: Request, env: unknown): Promise<Resp
 
   const target = new URL(`${getN8nBaseUrl(env)}/${reportWebhookPath(period, env)}`);
   target.searchParams.set("period", period);
+  target.searchParams.set("download", "true");
+  target.searchParams.set("source", "frontend");
   if (date) target.searchParams.set("date", date);
 
   const response = await fetch(target.toString(), {
@@ -292,14 +294,45 @@ async function handleReportRequest(request: Request, env: unknown): Promise<Resp
   let fileName = reportFilename(period, date);
 
   if (contentType.includes("application/json")) {
-    const payload = (await response.json()) as { base64?: string; fileName?: string; mimeType?: string; error?: string; message?: string };
+    const rawText = await response.text().catch(() => "");
+
+    if (!rawText.trim()) {
+      return new Response(
+        JSON.stringify({
+          error: true,
+          message: "O workflow n8n respondeu vazio. Verifique se a execução por webhook está caindo no node 'Responder PDF ao frontend' e não no caminho do WhatsApp.",
+          status: 502,
+          target: target.toString(),
+        }),
+        { status: 502, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+      );
+    }
+
+    let payload: { base64?: string; fileName?: string; mimeType?: string; error?: string; message?: string; size_base64?: number | string };
+    try {
+      payload = JSON.parse(rawText);
+    } catch (error) {
+      return new Response(
+        JSON.stringify({
+          error: true,
+          message: "O workflow n8n retornou JSON inválido.",
+          status: 502,
+          target: target.toString(),
+          detail: error instanceof Error ? error.message : String(error),
+          bodyStart: rawText.slice(0, 500),
+        }),
+        { status: 502, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+      );
+    }
+
     if (!payload.base64) {
       return new Response(
         JSON.stringify({
           error: true,
-          message: payload.message || payload.error || `O workflow n8n não retornou o PDF em base64.`,
+          message: payload.message || payload.error || "O workflow n8n não retornou o PDF em base64.",
           status: 502,
-          target: target.pathname,
+          target: target.toString(),
+          payload,
         }),
         { status: 502, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
       );

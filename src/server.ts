@@ -207,6 +207,87 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
 
 
 
+type ReportPeriod = "day" | "week" | "month";
+
+function normalizeReportPeriod(value: string | null): ReportPeriod {
+  return value === "week" || value === "month" || value === "day" ? value : "day";
+}
+
+function reportWebhookPath(period: ReportPeriod, env: unknown): string {
+  const fromEnv =
+    period === "month"
+      ? getEnvValue(env, "N8N_REPORT_MONTHLY_PATH") || getEnvValue(env, "REPORT_MONTHLY_PATH")
+      : period === "week"
+        ? getEnvValue(env, "N8N_REPORT_WEEKLY_PATH") || getEnvValue(env, "REPORT_WEEKLY_PATH")
+        : getEnvValue(env, "N8N_REPORT_DAILY_PATH") || getEnvValue(env, "REPORT_DAILY_PATH");
+
+  if (fromEnv) return fromEnv.replace(/^\/+/, "");
+
+  return period === "month"
+    ? "cag-relatorio-mensal"
+    : period === "week"
+      ? "cag-relatorio-semanal"
+      : "cag-relatorio-diario";
+}
+
+function reportFilename(period: ReportPeriod, date: string | null) {
+  const prefix = period === "month"
+    ? "relatorio-cag-mensal"
+    : period === "week"
+      ? "relatorio-cag-semanal"
+      : "relatorio-cag-diario";
+  return `${prefix}${date ? `-${date}` : ""}.pdf`;
+}
+
+async function handleReportRequest(request: Request, env: unknown): Promise<Response> {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: jsonHeaders() });
+  if (request.method !== "GET") {
+    return new Response(JSON.stringify({ error: true, message: "Method not allowed" }), {
+      status: 405,
+      headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }),
+    });
+  }
+
+  const incomingUrl = new URL(request.url);
+  const period = normalizeReportPeriod(incomingUrl.searchParams.get("period"));
+  const date = incomingUrl.searchParams.get("date") || incomingUrl.searchParams.get("data") || incomingUrl.searchParams.get("report_date");
+
+  const target = new URL(`${getN8nBaseUrl(env)}/${reportWebhookPath(period, env)}`);
+  target.searchParams.set("period", period);
+  if (date) target.searchParams.set("date", date);
+
+  const response = await fetch(target.toString(), {
+    method: "GET",
+    headers: {
+      accept: "application/pdf,application/octet-stream,text/plain,*/*",
+    },
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    return new Response(
+      JSON.stringify({
+        error: true,
+        message: `Não foi possível gerar o relatório ${period}.`,
+        status: response.status,
+        detail,
+        target: target.pathname,
+      }),
+      { status: response.status, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+    );
+  }
+
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", "*");
+  headers.set("content-type", response.headers.get("content-type") || "application/pdf");
+  if (!headers.has("content-disposition")) {
+    headers.set("content-disposition", `attachment; filename="${reportFilename(period, date)}"`);
+  }
+
+  return new Response(response.body, { status: response.status, headers });
+}
+
+
 function extractBotAnswer(payload: unknown): string | null {
   if (typeof payload === "string") return payload.trim() || null;
   if (!payload || typeof payload !== "object") return null;
@@ -404,6 +485,10 @@ export default {
 
     if (url.pathname === "/api/dashboard/upload") {
       return handleUploadRequest(request, env);
+    }
+
+    if (url.pathname === "/api/report") {
+      return handleReportRequest(request, env);
     }
 
     if (url.pathname === "/api/settings") {

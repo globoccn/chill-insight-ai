@@ -1,11 +1,14 @@
-import { Calendar, CheckCircle2, Moon, Sun, ChevronDown, LogOut } from "lucide-react";
+import { Calendar, CheckCircle2, Moon, Sun, ChevronDown, Download, Loader2, LogOut } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { formatDate, formatDateTime, useDashboardData } from "@/lib/dashboard-data";
 import { periodLabels, setDashboardPeriod, useDashboardPeriod, type DashboardPeriod } from "@/lib/period";
 import { logoutDemo } from "@/lib/auth";
+import { downloadReportPdf, isoDateOnly, reportPeriodLabels } from "@/lib/report-download";
+import { useState } from "react";
 
 export function Header() {
   const { theme, toggle } = useTheme();
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const { data } = useDashboardData();
   const period = useDashboardPeriod();
   const periods: DashboardPeriod[] = ["day", "week", "month"];
@@ -14,6 +17,21 @@ export function Header() {
   const endDate = formatDate(data?.overview.periodo_fim);
   const analyzedDate = period === "day" || startDate === endDate ? endDate : `${startDate} – ${endDate}`;
   const lastImport = formatDateTime(data?.overview.periodo_fim);
+  const reportDate = isoDateOnly(data?.overview.periodo_fim);
+
+  async function handleDownloadReport() {
+    if (isDownloadingReport) return;
+
+    setIsDownloadingReport(true);
+    try {
+      await downloadReportPdf(period, reportDate);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível baixar o relatório agora.";
+      window.alert(message);
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  }
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
@@ -58,6 +76,18 @@ export function Header() {
               </button>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={handleDownloadReport}
+            disabled={isDownloadingReport || !data}
+            className="inline-flex h-9 items-center gap-2 rounded-full border border-efficiency/30 bg-efficiency/10 px-3 text-xs font-semibold text-efficiency shadow-sm transition hover:border-efficiency/60 hover:bg-efficiency/15 disabled:cursor-not-allowed disabled:opacity-60"
+            title={`Baixar relatório ${reportPeriodLabels[period]}`}
+          >
+            {isDownloadingReport ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            <span className="hidden lg:inline">Relatório {reportPeriodLabels[period]}</span>
+            <span className="lg:hidden">PDF</span>
+          </button>
 
           <button onClick={toggle} aria-label="Alternar tema" className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-card px-1 shadow-sm">
             <span className={["grid h-7 w-7 place-items-center rounded-full transition", theme === "light" ? "bg-warning/20 text-warning" : "text-muted-foreground"].join(" ")}><Sun className="h-3.5 w-3.5" /></span>

@@ -72,6 +72,9 @@ export async function downloadReportPdf(period: DashboardPeriod, date?: string |
   }
 
   const blob = await response.blob();
+  if (blob.size === 0) {
+    throw new Error("O PDF foi gerado vazio. Tente novamente ou verifique o workflow de relatório no n8n.");
+  }
   const filename = filenameFromContentDisposition(response.headers.get("content-disposition")) || buildReportFilename(period, date);
 
   const objectUrl = URL.createObjectURL(blob);

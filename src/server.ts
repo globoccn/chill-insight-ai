@@ -239,6 +239,14 @@ function reportFilename(period: ReportPeriod, date: string | null) {
   return `${prefix}${date ? `-${date}` : ""}.pdf`;
 }
 
+function filenameFromContentDisposition(header: string | null) {
+  if (!header) return null;
+  const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8?.[1]) return decodeURIComponent(utf8[1].replace(/["']/g, ""));
+  const basic = header.match(/filename="?([^";]+)"?/i);
+  return basic?.[1] || null;
+}
+
 async function handleReportRequest(request: Request, env: unknown): Promise<Response> {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: jsonHeaders() });
   if (request.method !== "GET") {
@@ -259,7 +267,9 @@ async function handleReportRequest(request: Request, env: unknown): Promise<Resp
   const response = await fetch(target.toString(), {
     method: "GET",
     headers: {
-      accept: "application/pdf,application/octet-stream,text/plain,*/*",
+      // O workflow n8n agora responde JSON com o PDF em base64.
+      // Mantemos application/pdf aqui como fallback para workflows antigos.
+      accept: "application/json,application/pdf,application/octet-stream,text/plain,*/*",
     },
   });
 
@@ -277,14 +287,55 @@ async function handleReportRequest(request: Request, env: unknown): Promise<Resp
     );
   }
 
-  const headers = new Headers(response.headers);
-  headers.set("access-control-allow-origin", "*");
-  headers.set("content-type", response.headers.get("content-type") || "application/pdf");
-  if (!headers.has("content-disposition")) {
-    headers.set("content-disposition", `attachment; filename="${reportFilename(period, date)}"`);
+  const contentType = response.headers.get("content-type") || "";
+  let arrayBuffer: ArrayBuffer;
+  let fileName = reportFilename(period, date);
+
+  if (contentType.includes("application/json")) {
+    const payload = (await response.json()) as { base64?: string; fileName?: string; mimeType?: string; error?: string; message?: string };
+    if (!payload.base64) {
+      return new Response(
+        JSON.stringify({
+          error: true,
+          message: payload.message || payload.error || `O workflow n8n não retornou o PDF em base64.`,
+          status: 502,
+          target: target.pathname,
+        }),
+        { status: 502, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+      );
+    }
+
+    const binary = atob(payload.base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    arrayBuffer = bytes.buffer;
+    if (payload.fileName) fileName = payload.fileName;
+  } else {
+    arrayBuffer = await response.arrayBuffer();
+    fileName = filenameFromContentDisposition(response.headers.get("content-disposition")) || fileName;
   }
 
-  return new Response(response.body, { status: response.status, headers });
+  if (!arrayBuffer.byteLength) {
+    return new Response(
+      JSON.stringify({
+        error: true,
+        message: `O relatório ${period} foi gerado, mas o PDF chegou vazio ao frontend.`,
+        status: 502,
+        target: target.pathname,
+        hint: "Verifique se o workflow n8n retornou base64 preenchido no campo base64.",
+      }),
+      { status: 502, headers: jsonHeaders({ "content-type": "application/json; charset=utf-8" }) },
+    );
+  }
+
+  const headers = new Headers();
+  headers.set("access-control-allow-origin", "*");
+  headers.set("content-type", "application/pdf");
+  headers.set("content-length", String(arrayBuffer.byteLength));
+  headers.set("cache-control", "no-store");
+  headers.set("content-disposition", `attachment; filename="${fileName}"`);
+
+  return new Response(arrayBuffer, { status: 200, headers });
 }
 
 

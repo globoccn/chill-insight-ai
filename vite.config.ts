@@ -7,7 +7,7 @@ export default defineConfig({
 
   vite: {
     server: {
-      allowedHosts: ["globo-vm22.2see.io"],
+      allowedHosts: ["infrafm.2see.io"],
     },
   },
 });

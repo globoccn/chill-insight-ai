@@ -192,13 +192,13 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
   const period = url.searchParams.get("period");
   const normalizedPeriod = period === "week" || period === "month" ? period : "day";
 
-  // D-1 também usa 7 dias para manter comparações locais.
-  // Semana: tenta 7 dias. Mês: tenta 30 dias. O n8n deve devolver apenas os dias existentes.
+  // D-1/Semana/Mês buscam 30 dias para encontrar os últimos dados disponíveis.
+  // O frontend continua recortando visualmente o período selecionado.
   const targetPath = normalizedPeriod === "month" ? "dashboard-data-month" : "dashboard-data-week";
 
   url.searchParams.set("period", normalizedPeriod);
   if (!url.searchParams.has("days")) {
-    url.searchParams.set("days", normalizedPeriod === "month" ? "30" : "7");
+    url.searchParams.set("days", "30");
   }
 
   const proxiedRequest = new Request(url.toString(), request);

@@ -782,15 +782,17 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
 
 function urlWithPeriod(url: string, period: DashboardPeriod) {
   const separator = url.includes("?") ? "&" : "?";
-  const days = period === "month" ? 30 : 7;
+  const days = 30;
 
-  // Mesmo no D-1 buscamos um payload histórico curto para comparações locais.
+  // Mesmo no D-1/Semana buscamos uma janela maior para encontrar os últimos dias disponíveis.
+  // A tela continua recortando visualmente o período selecionado depois que os dados chegam.
   return `${url}${separator}period=${encodeURIComponent(period)}&days=${days}`;
 }
 
 function dashboardUrlForPeriod(baseUrl: string, period: DashboardPeriod) {
   // O frontend precisa receber payload histórico para calcular D-1 vs D-2,
-  // tendências e comparações locais. Semana usa 7 dias; mês usa até 30 dias.
+  // tendências e comparações locais. Buscamos 30 dias em todos os períodos
+  // para evitar tela vazia quando os últimos 7 dias ainda não existem no Redis.
   if (baseUrl === DASHBOARD_DATA_URL) {
     return urlWithPeriod(baseUrl, period);
   }

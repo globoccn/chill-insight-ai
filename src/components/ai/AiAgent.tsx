@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { getDashboardPeriod } from "@/lib/period";
 
 const RAW_AI_AGENT_URL = import.meta.env.VITE_AI_AGENT_URL || "/api/cag-bot";
 
@@ -87,7 +88,10 @@ export function AiAgent() {
           "content-type": "application/json",
           accept: "application/json",
         },
-        body: JSON.stringify({ question: cleanQuestion }),
+        body: JSON.stringify({
+          question: cleanQuestion,
+          period: getDashboardPeriod(),
+        }),
         signal: controller.signal,
       }).finally(() => window.clearTimeout(timeout));
 

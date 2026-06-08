@@ -198,7 +198,7 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
 
   url.searchParams.set("period", normalizedPeriod);
   if (!url.searchParams.has("days")) {
-    url.searchParams.set("days", "30");
+    url.searchParams.set("days", normalizedPeriod === "month" ? "60" : "30");
   }
 
   const proxiedRequest = new Request(url.toString(), request);

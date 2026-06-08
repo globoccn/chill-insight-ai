@@ -115,24 +115,13 @@ function safeDiv(a: number, b: number) {
 
 function parseDate(value?: string | null) {
   if (!value) return null;
-  const text = String(value).trim();
-
-  // Evita deslocamento de fuso em strings "YYYY-MM-DD".
-  const isoDateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (isoDateOnly) {
-    const [, yyyy, mm, dd] = isoDateOnly;
-    return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-  }
-
-  const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2}))?/);
-  if (match) {
-    const [, dd, mm, yyyy, hh = "00", mi = "00"] = match;
-    const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi));
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  const native = new Date(text);
-  return Number.isNaN(native.getTime()) ? null : native;
+  const native = new Date(value);
+  if (!Number.isNaN(native.getTime())) return native;
+  const match = String(value).match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2}))?/);
+  if (!match) return null;
+  const [, dd, mm, yyyy, hh = "00", mi = "00"] = match;
+  const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function dateKey(value?: string | null) {

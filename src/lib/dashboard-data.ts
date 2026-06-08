@@ -217,40 +217,17 @@ export function formatNumber(value: number | null | undefined, decimals = 0) {
   });
 }
 
-function parseLocalDateValue(value?: string | null) {
-  if (!value) return null;
-  const text = String(value).trim();
-  if (!text) return null;
-
-  // Evita deslocamento de fuso em strings "YYYY-MM-DD".
-  // new Date("2026-05-28") é interpretado como UTC e no Brasil pode virar 27/05.
-  const isoDateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (isoDateOnly) {
-    const [, yyyy, mm, dd] = isoDateOnly;
-    return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-  }
-
-  const brDate = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2}))?/);
-  if (brDate) {
-    const [, dd, mm, yyyy, hh = "00", mi = "00"] = brDate;
-    return new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi));
-  }
-
-  const native = new Date(text);
-  return Number.isNaN(native.getTime()) ? null : native;
-}
-
 export function formatDateTime(value?: string | null) {
   if (!value) return "—";
-  const d = parseLocalDateValue(value);
-  if (!d) return value;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
 export function formatDate(value?: string | null) {
   if (!value) return "—";
-  const d = parseLocalDateValue(value);
-  if (!d) return value.split("T")[0] || value;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value.split("T")[0] || value;
   return d.toLocaleDateString("pt-BR");
 }
 
@@ -315,7 +292,22 @@ function normalize(payload: unknown): DashboardData {
 }
 
 function parseDateLike(value?: string | null) {
-  return parseLocalDateValue(value);
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+
+  const native = new Date(text);
+  if (!Number.isNaN(native.getTime())) return native;
+
+  // Aceita formatos comuns vindos do serviço de dados/CSV, como "24/05/2026, 23:45" ou "24/05/2026 23:45".
+  const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2}))?/);
+  if (match) {
+    const [, dd, mm, yyyy, hh = "00", mi = "00"] = match;
+    const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi));
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return null;
 }
 
 function dateKey(value?: string | null) {
@@ -790,10 +782,11 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
 
 function urlWithPeriod(url: string, period: DashboardPeriod) {
   const separator = url.includes("?") ? "&" : "?";
-  const days = 30;
+  // Para Mês, buscamos uma janela maior porque o endpoint usa a data atual como referência.
+  // Como o histórico da demo termina em 28/05, 30 dias a partir de junho cortava 29/04–09/05.
+  // O recorte visual continua sendo feito no frontend pelo último ponto disponível.
+  const days = period === "month" ? 60 : 30;
 
-  // Mesmo no D-1/Semana buscamos uma janela maior para encontrar os últimos dias disponíveis.
-  // A tela continua recortando visualmente o período selecionado depois que os dados chegam.
   return `${url}${separator}period=${encodeURIComponent(period)}&days=${days}`;
 }
 

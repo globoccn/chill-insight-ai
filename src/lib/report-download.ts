@@ -17,23 +17,20 @@ export const reportFilePrefixes: Record<DashboardPeriod, string> = {
 export function isoDateOnly(value?: string | null) {
   if (!value) return null;
 
-  const raw = String(value).trim();
-
-  // Prioriza a data textual para não sofrer deslocamento de fuso.
-  // Ex.: "2026-05-28" não deve virar "2026-05-27" no Brasil.
-  const iso = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (iso) return iso[1];
-
-  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
-
-  const native = new Date(raw);
+  const native = new Date(value);
   if (!Number.isNaN(native.getTime())) {
     const yyyy = native.getFullYear();
     const mm = String(native.getMonth() + 1).padStart(2, "0");
     const dd = String(native.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
   }
+
+  const raw = String(value).trim();
+  const iso = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
 
   return null;
 }

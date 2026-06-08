@@ -54,6 +54,10 @@ export async function downloadReportPdf(period: DashboardPeriod, date?: string |
   url.searchParams.set("period", period);
   if (date) url.searchParams.set("date", date);
 
+  // InfraFM demo: relatório mensal deve acionar o modo demo seguro no n8n.
+  // Isso adiciona os 2 meses sintéticos apenas no PDF, sem afetar dashboards/bot.
+  if (period === "month") url.searchParams.set("demo", "true");
+
   const response = await fetch(url.toString(), {
     method: "GET",
     headers: { accept: "application/pdf" },

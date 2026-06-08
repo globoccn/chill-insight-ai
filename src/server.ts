@@ -259,12 +259,14 @@ async function handleReportRequest(request: Request, env: unknown): Promise<Resp
   const incomingUrl = new URL(request.url);
   const period = normalizeReportPeriod(incomingUrl.searchParams.get("period"));
   const date = incomingUrl.searchParams.get("date") || incomingUrl.searchParams.get("data") || incomingUrl.searchParams.get("report_date");
+  const demo = incomingUrl.searchParams.get("demo");
 
   const target = new URL(`${getN8nBaseUrl(env)}/${reportWebhookPath(period, env)}`);
   target.searchParams.set("period", period);
   target.searchParams.set("download", "true");
   target.searchParams.set("source", "frontend");
   if (date) target.searchParams.set("date", date);
+  if (demo === "true" || demo === "1" || demo === "demo") target.searchParams.set("demo", "true");
 
   const response = await fetch(target.toString(), {
     method: "GET",

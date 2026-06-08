@@ -14,6 +14,12 @@ export const N8N_DASHBOARD_DATA_MONTH_URL = `${n8nBaseUrl}/dashboard-data-month`
 export const N8N_SETTINGS_URL = `${n8nBaseUrl}/dashboard-settings`;
 export const N8N_UPLOAD_WEBHOOK_URL = `${n8nBaseUrl}/dados-globo-vm22`;
 
+// Data de referência da base demonstrativa da InfraFM.
+// O histórico real disponível no ambiente de demo fecha em 28/05/2026;
+// enviar essa data evita que o endpoint calcule o mês a partir da data atual
+// e corte o início correto do período (29/04/2026).
+const DEMO_MONTH_END_DATE = import.meta.env.VITE_DEMO_MONTH_END_DATE || "2026-05-28";
+
 // Padrão correto em produção: o browser chama o backend do próprio dashboard.
 // O server.ts então faz proxy para o serviço de dados. Isso evita bloqueio de CORS.
 export const DASHBOARD_DATA_URL = import.meta.env.VITE_DASHBOARD_DATA_URL || "/api/dashboard";
@@ -782,12 +788,21 @@ function scopeDashboardData(data: DashboardData, period: DashboardPeriod = "day"
 
 function urlWithPeriod(url: string, period: DashboardPeriod) {
   const separator = url.includes("?") ? "&" : "?";
-  // Para Mês, buscamos uma janela maior porque o endpoint usa a data atual como referência.
-  // Como o histórico da demo termina em 28/05, 30 dias a partir de junho cortava 29/04–09/05.
-  // O recorte visual continua sendo feito no frontend pelo último ponto disponível.
-  const days = period === "month" ? 60 : 30;
+  const params = new URLSearchParams();
+  params.set("period", period);
 
-  return `${url}${separator}period=${encodeURIComponent(period)}&days=${days}`;
+  if (period === "month") {
+    // Para a demo InfraFM, o mês correto fecha no último dado real disponível.
+    // Sem essa referência, o endpoint usa a data atual e acaba retornando só 09/05–28/05.
+    params.set("days", "30");
+    params.set("date", DEMO_MONTH_END_DATE);
+    params.set("end_date", DEMO_MONTH_END_DATE);
+    params.set("report_date", DEMO_MONTH_END_DATE);
+  } else {
+    params.set("days", "30");
+  }
+
+  return `${url}${separator}${params.toString()}`;
 }
 
 function dashboardUrlForPeriod(baseUrl: string, period: DashboardPeriod) {

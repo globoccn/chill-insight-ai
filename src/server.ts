@@ -19,6 +19,7 @@ async function getServerEntry(): Promise<ServerEntry> {
 }
 
 const DEFAULT_N8N_BASE_URL = "https://ancar-n8n.gpfgqx.easypanel.host/webhook";
+const DEFAULT_DEMO_MONTH_END_DATE = "2026-05-28";
 
 function getEnvValue(env: unknown, key: string): string | undefined {
   const fromEnv = env && typeof env === "object" ? (env as Record<string, unknown>)[key] : undefined;
@@ -197,8 +198,16 @@ async function handleDashboardRequest(request: Request, env: unknown): Promise<R
   const targetPath = normalizedPeriod === "month" ? "dashboard-data-month" : "dashboard-data-week";
 
   url.searchParams.set("period", normalizedPeriod);
-  if (!url.searchParams.has("days")) {
-    url.searchParams.set("days", normalizedPeriod === "month" ? "60" : "30");
+  if (normalizedPeriod === "month") {
+    const demoMonthEnd = getEnvValue(env, "VITE_DEMO_MONTH_END_DATE") || getEnvValue(env, "DEMO_MONTH_END_DATE") || DEFAULT_DEMO_MONTH_END_DATE;
+    // O endpoint mensal precisa receber a data de fechamento do histórico.
+    // Caso contrário, ele usa a data atual e corta o começo do mês demonstrativo.
+    url.searchParams.set("days", "30");
+    if (!url.searchParams.has("date")) url.searchParams.set("date", demoMonthEnd);
+    if (!url.searchParams.has("end_date")) url.searchParams.set("end_date", demoMonthEnd);
+    if (!url.searchParams.has("report_date")) url.searchParams.set("report_date", demoMonthEnd);
+  } else if (!url.searchParams.has("days")) {
+    url.searchParams.set("days", "30");
   }
 
   const proxiedRequest = new Request(url.toString(), request);

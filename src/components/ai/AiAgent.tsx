@@ -22,12 +22,15 @@ type ChatMessage = {
 };
 
 const quickQuestions = [
-  "Qual foi o consumo da semana?",
-  "Qual foi o pico de demanda?",
-  "Como ficou a eficiência?",
-  "Quanto economizamos versus baseline?",
-  "Qual chiller merece atenção?",
-  "Qual era o kW às 14:15 no dia 20/05?",
+  "Qual foi o consumo hoje?",
+  "Qual foi o kW/TR da semana?",
+  "Faça uma análise da semana",
+  "Quais foram os 3 principais problemas da semana?",
+  "Existe alguma anomalia operacional hoje?",
+  "O clima influenciou a eficiência hoje?",
+  "Compare hoje com ontem",
+  "Por que hoje foi pior que ontem?",
+  "Compare 28/05 com 21/05",
 ];
 
 function extractAnswer(payload: unknown) {
@@ -63,7 +66,7 @@ export function AiAgent() {
   const [question, setQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    newMessage("assistant", "Olá! Sou o Assistente CAG. Pergunte sobre consumo, eficiência, chillers, ESG, economia ou um horário específico."),
+    newMessage("assistant", "Olá! Sou o Assistente CAG. Pergunte sobre KPIs, diagnósticos, anomalias, clima e comparações. Para melhores resultados, informe sempre um período: hoje, ontem, semana, mês ou uma data específica."),
   ]);
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -153,12 +156,16 @@ export function AiAgent() {
             </div>
             <div>
               <SheetTitle>Assistente Inteligente CAG</SheetTitle>
-              <SheetDescription>Consulte consumo, eficiência, chillers, ESG e pontos de 15 minutos.</SheetDescription>
+              <SheetDescription>Consulte KPIs, diagnósticos, anomalias, clima e comparações entre períodos.</SheetDescription>
             </div>
           </div>
         </SheetHeader>
 
         <div className="border-b border-border px-5 py-3">
+          <div className="mb-2 rounded-xl border border-efficiency/20 bg-efficiency/10 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            💡 Dica: inclua sempre um período ou data na pergunta, como <strong className="text-foreground">hoje</strong>, <strong className="text-foreground">ontem</strong>, <strong className="text-foreground">semana</strong>, <strong className="text-foreground">mês</strong> ou <strong className="text-foreground">28/05</strong>.
+          </div>
+          <div className="mb-2 text-xs font-medium text-foreground">Exemplos de perguntas</div>
           <div className="flex flex-wrap gap-2">
             {quickQuestions.map((item) => (
               <button
@@ -220,7 +227,7 @@ export function AiAgent() {
                   void sendQuestion();
                 }
               }}
-              placeholder="Ex.: Qual era o kW às 14:15 no dia 20/05?"
+              placeholder="Ex.: Faça uma análise da semana ou compare hoje com ontem"
               className="min-h-[78px] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
             />
             <div className="flex items-center justify-between gap-2 px-1 pb-1">

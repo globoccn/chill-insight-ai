@@ -165,19 +165,24 @@ export function AiAgent() {
           <div className="mb-2 rounded-xl border border-efficiency/20 bg-efficiency/10 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             💡 Dica: inclua sempre um período ou data na pergunta, como <strong className="text-foreground">hoje</strong>, <strong className="text-foreground">ontem</strong>, <strong className="text-foreground">semana</strong>, <strong className="text-foreground">mês</strong> ou <strong className="text-foreground">28/05</strong>.
           </div>
-          <div className="mb-2 text-xs font-medium text-foreground">Exemplos de perguntas</div>
-          <div className="flex flex-wrap gap-2">
-            {quickQuestions.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => void sendQuestion(item)}
-                disabled={isLoading}
-                className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:border-efficiency/40 hover:text-foreground disabled:opacity-60"
-              >
-                {item}
-              </button>
-            ))}
+          <div className="mb-2 flex items-center justify-between gap-2 text-xs">
+            <span className="font-medium text-foreground">Exemplos de perguntas</span>
+            <span className="text-[11px] text-muted-foreground">role para ver mais</span>
+          </div>
+          <div className="max-h-[118px] overflow-y-auto pr-1 [scrollbar-width:thin]">
+            <div className="flex flex-wrap gap-2 pb-1">
+              {quickQuestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => void sendQuestion(item)}
+                  disabled={isLoading}
+                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:border-efficiency/40 hover:text-foreground disabled:opacity-60"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
